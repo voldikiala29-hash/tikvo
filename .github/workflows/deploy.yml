@@ -1,4 +1,5 @@
-name: Deploy tikvo to 【entity-GitHub¦canonical_name=GitHub】 Pages
+
+name: Deploy tikvo to Pages
 on:
   push:
     branches: [ "main" ]
@@ -22,17 +23,18 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
-      - run: npm ci
+      - run: npm install
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ./dist
   deploy:
     environment:
-      name: 【entity-github¦canonical_name=GitHub】-pages
+      name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     needs: build
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
