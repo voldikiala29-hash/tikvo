@@ -1,0 +1,6 @@
+{
+  "name": "Tikokvoldi - Universal TikTok Viral Manager",
+  "description": "Dashboard SaaS PRO dark mode moderne pour gérer des pages TikTok, analyser le viral par niche, générer des scripts et automatiser la monétisation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
