@@ -9,21 +9,15 @@
     <meta property="og:description" content="tikvo - SaaS dark luxe pour gérer toutes les niches TikTok, générer des vidéos virales 9:16 avec Remotion et poster automatiquement." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
-    <!-- SPA route restore script for GitHub Pages -->
+    <!-- SPA route restore script for GitHub Pages (HashRouter compatible) -->
     <script type="text/javascript">
-      // Single Page Apps for GitHub Pages
-      // MIT License - https://github.com/rafgraph/spa-github-pages
-      // This script checks to see if a redirect is present in the query string,
-      // converts it back into the correct url and adds it to the
-      // browser's history using window.history.replaceState(...),
-      // which won't cause the browser to attempt to load the new url.
       (function(l) {
         if (l.search[1] === '/' ) {
           var decoded = l.search.slice(1).split('&').map(function(s) { 
             return s.replace(/~and~/g, '&')
           }).join('?');
-          window.history.replaceState(null, null,
-              l.pathname.slice(0, -1) + decoded + l.hash
+          window.location.replace(
+            l.pathname + '#' + decoded + (l.hash ? l.hash.replace(/^#/, '') : '')
           );
         }
       }(window.location))

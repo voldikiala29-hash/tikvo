@@ -8,12 +8,20 @@ import {
   onSnapshot,
   getDoc,
 } from 'firebase/firestore';
-import { auth, db, googleProvider, handleFirestoreError, OperationType } from '../services/firebase';
+import {
+  auth,
+  db,
+  googleProvider,
+  isFirebaseConfigured,
+  handleFirestoreError,
+  OperationType,
+} from '../services/firebase';
 import { NicheData, ScheduledPost } from '../types/tiktok';
 
-interface FirebaseContextType {
+export interface FirebaseContextType {
   user: User | null;
   loading: boolean;
+  isFirebaseConfigured: boolean;
   signInWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   saveCustomNiche: (niche: NicheData) => Promise<void>;
@@ -31,223 +39,252 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [firestoreCustomNiches, setFirestoreCustomNiches] = useState<Record<string, NicheData>>({});
   const [firestoreScheduledPosts, setFirestoreScheduledPosts] = useState<ScheduledPost[]>([]);
 
-  // Listen to auth state
+  // 1. Listen to auth state safely
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
+    if (!isFirebaseConfigured || !auth) {
       setLoading(false);
+      return;
+    }
 
-      if (currentUser) {
-        // Sync user profile document
-        const userDocPath = `users/${currentUser.uid}`;
-        try {
-          const userRef = doc(db, 'users', currentUser.uid);
-          const existingSnap = await getDoc(userRef);
+    try {
+      const unsubscribe = onAuthStateChanged(
+        auth,
+        async (currentUser) => {
+          setUser(currentUser);
+          setLoading(false);
 
-          if (!existingSnap.exists()) {
-            await setDoc(userRef, {
-              uid: currentUser.uid,
-              email: currentUser.email || '',
-              displayName: currentUser.displayName || 'tikvo creator',
-              photoURL: currentUser.photoURL || '',
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            });
+          if (currentUser && db) {
+            // Sync user profile document in Firestore
+            const userDocPath = `users/${currentUser.uid}`;
+            try {
+              const userRef = doc(db, 'users', currentUser.uid);
+              const existingSnap = await getDoc(userRef);
+
+              if (!existingSnap.exists()) {
+                await setDoc(userRef, {
+                  uid: currentUser.uid,
+                  email: currentUser.email || '',
+                  displayName: currentUser.displayName || 'tikvo creator',
+                  photoURL: currentUser.photoURL || '',
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                });
+              } else {
+                await setDoc(
+                  userRef,
+                  {
+                    displayName: currentUser.displayName || 'tikvo creator',
+                    photoURL: currentUser.photoURL || '',
+                    updatedAt: new Date().toISOString(),
+                  },
+                  { merge: true }
+                );
+              }
+            } catch (err) {
+              handleFirestoreError(err, OperationType.WRITE, userDocPath);
+            }
           } else {
-            await setDoc(
-              userRef,
-              {
-                displayName: currentUser.displayName || 'tikvo creator',
-                photoURL: currentUser.photoURL || '',
-                updatedAt: new Date().toISOString(),
-              },
-              { merge: true }
-            );
+            setFirestoreCustomNiches({});
+            setFirestoreScheduledPosts([]);
           }
-        } catch (err) {
-          handleFirestoreError(err, OperationType.WRITE, userDocPath);
+        },
+        (error) => {
+          console.warn('[Firebase Auth] Erreur d’état utilisateur:', error);
+          setLoading(false);
         }
-      } else {
-        setFirestoreCustomNiches({});
-        setFirestoreScheduledPosts([]);
-      }
-    });
+      );
 
-    return () => unsubscribe();
+      return () => unsubscribe();
+    } catch (err) {
+      console.warn('[Firebase Auth] Impossible d’attacher le listener:', err);
+      setLoading(false);
+    }
   }, []);
 
-  // Listen to custom niches if authenticated
+  // 2. Listen to custom niches if authenticated and db is ready
   useEffect(() => {
-    if (!user) return;
+    if (!isFirebaseConfigured || !db || !user) return;
 
     const nichesPath = `users/${user.uid}/customNiches`;
-    const nichesCol = collection(db, 'users', user.uid, 'customNiches');
+    try {
+      const nichesCol = collection(db, 'users', user.uid, 'customNiches');
 
-    const unsubscribe = onSnapshot(
-      nichesCol,
-      (snapshot) => {
-        const nichesMap: Record<string, NicheData> = {};
-        snapshot.docs.forEach((docSnap) => {
-          const data = docSnap.data() as any;
-          if (data && data.id) {
-            nichesMap[data.id] = {
-              id: data.id,
-              name: data.name,
-              emoji: data.emoji,
-              tagline: data.tagline || '',
-              description: data.description || '',
-              kpis: {
-                totalViews: '1.2M',
-                viewsGrowth: '+45.0%',
-                followers: '32.4K',
-                followersGrowth: '+18.2%',
-                viralityRate: '9.4%',
-                viralityGrowth: '+2.1%',
-                estimatedRevenue: '1 250 €',
-                revenueGrowth: '+30.0%',
-              },
-              templates: [
-                {
-                  id: `${data.id}-tpl-1`,
-                  title: `3 Erreurs fatales dans ${data.name}`,
-                  structure: 'Hook choc -> Problème n°1 -> Solution inédite',
-                  avgRetention: '86%',
-                  bestDuration: '20s',
-                  exampleHook: data.firstHook || `Si tu fais ça dans ${data.name}, arrête.`,
-                  description: `Template optimisé pour l'engagement dans ${data.name}`,
-                  recommendedSoundType: 'Beat énergique',
+      const unsubscribe = onSnapshot(
+        nichesCol,
+        (snapshot) => {
+          const nichesMap: Record<string, NicheData> = {};
+          snapshot.docs.forEach((docSnap) => {
+            const data = docSnap.data() as any;
+            if (data && data.id) {
+              nichesMap[data.id] = {
+                id: data.id,
+                name: data.name,
+                emoji: data.emoji,
+                tagline: data.tagline || '',
+                description: data.description || '',
+                kpis: {
+                  totalViews: '1.2M',
+                  viewsGrowth: '+45.0%',
+                  followers: '32.4K',
+                  followersGrowth: '+18.2%',
+                  viralityRate: '9.4%',
+                  viralityGrowth: '+2.1%',
+                  estimatedRevenue: '1 250 €',
+                  revenueGrowth: '+30.0%',
                 },
-              ],
-              hooks: [
-                {
-                  id: `${data.id}-hook-1`,
-                  category: 'choc',
-                  text: data.firstHook || `Le secret de ${data.name} que 99% ignorent.`,
-                  retentionRate: 91,
-                  difficulty: 'Facile',
+                templates: [
+                  {
+                    id: `${data.id}-tpl-1`,
+                    title: `3 Erreurs fatales dans ${data.name}`,
+                    structure: 'Hook choc -> Problème n°1 -> Solution inédite',
+                    avgRetention: '86%',
+                    bestDuration: '20s',
+                    exampleHook: data.firstHook || `Si tu fais ça dans ${data.name}, arrête.`,
+                    description: `Template optimisé pour l'engagement dans ${data.name}`,
+                    recommendedSoundType: 'Beat énergique',
+                  },
+                ],
+                hooks: [
+                  {
+                    id: `${data.id}-hook-1`,
+                    category: 'choc',
+                    text: data.firstHook || `Le secret de ${data.name} que 99% ignorent.`,
+                    retentionRate: 91,
+                    difficulty: 'Facile',
+                  },
+                ],
+                sounds: [
+                  {
+                    id: `${data.id}-snd-1`,
+                    title: `Viral Pulse for ${data.name}`,
+                    artist: 'tikvo Sounds',
+                    usageCount: '142.0K',
+                    growth: '+210%',
+                    isHot: true,
+                    bpm: 120,
+                    genre: 'Cyber Electronic',
+                    viralScore: 95,
+                  },
+                ],
+                hashtags: [
+                  {
+                    id: `${data.id}-tag-1`,
+                    tag: data.firstHashtag || `#${data.name.replace(/\s+/g, '')}Tok`,
+                    views: '1.4B',
+                    growth: '+85%',
+                    competition: 'Moyenne',
+                    trendScore: 94,
+                  },
+                ],
+                formats: [
+                  {
+                    id: `${data.id}-fmt-1`,
+                    name: 'Face Cam Dynamique',
+                    badge: 'Rétention Forte',
+                    description: 'Présentation rythmée avec zoom',
+                    avgWatchTime: '90%',
+                    viralMultiplier: '3.0x',
+                  },
+                ],
+                products: [
+                  {
+                    id: `${data.id}-prd-1`,
+                    name: `Kit Démarrage ${data.name}`,
+                    price: '29,90 €',
+                    commission: '7,50 €',
+                    commissionRate: 25,
+                    sales24h: 310,
+                    category: 'Produit Niche',
+                    sampleAvailable: true,
+                    rating: 4.9,
+                  },
+                ],
+                affiliates: [
+                  {
+                    id: `${data.id}-aff-1`,
+                    brand: `Partenaire ${data.name}`,
+                    offer: '15% de commission',
+                    payout: '15% net',
+                    conversionRate: '4.2%',
+                    status: 'Top Performer',
+                    link: 'https://creators.tiktok.com/custom',
+                  },
+                ],
+                accounts: [
+                  {
+                    id: `${data.id}-acc-1`,
+                    handle: `@tikvo_${data.name.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
+                    displayName: `${data.name} Master Studio`,
+                    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+                    nicheId: data.id,
+                    followers: 32400,
+                    totalLikes: '840K',
+                    avgViews: '45K',
+                    engagementRate: '9.4%',
+                    apiConnected: true,
+                    autoPostEnabled: true,
+                    shadowbanRisk: 'Aucun',
+                    creatorRewardsEligible: true,
+                  },
+                ],
+                targetAudience: {
+                  ageRange: data.targetAudience || '18 - 35 ans',
+                  genderRatio: '50% Hommes / 50% Femmes',
+                  peakHours: ['12:30', '18:30', '21:00'],
+                  topGeo: ['France', 'Belgique', 'Suisse'],
                 },
-              ],
-              sounds: [
-                {
-                  id: `${data.id}-snd-1`,
-                  title: `Viral Pulse for ${data.name}`,
-                  artist: 'tikvo Sounds',
-                  usageCount: '142.0K',
-                  growth: '+210%',
-                  isHot: true,
-                  bpm: 120,
-                  genre: 'Cyber Electronic',
-                  viralScore: 95,
-                },
-              ],
-              hashtags: [
-                {
-                  id: `${data.id}-tag-1`,
-                  tag: data.firstHashtag || `#${data.name.replace(/\s+/g, '')}Tok`,
-                  views: '1.4B',
-                  growth: '+85%',
-                  competition: 'Moyenne',
-                  trendScore: 94,
-                },
-              ],
-              formats: [
-                {
-                  id: `${data.id}-fmt-1`,
-                  name: 'Face Cam Dynamique',
-                  badge: 'Rétention Forte',
-                  description: 'Présentation rythmée avec zoom',
-                  avgWatchTime: '90%',
-                  viralMultiplier: '3.0x',
-                },
-              ],
-              products: [
-                {
-                  id: `${data.id}-prd-1`,
-                  name: `Kit Démarrage ${data.name}`,
-                  price: '29,90 €',
-                  commission: '7,50 €',
-                  commissionRate: 25,
-                  sales24h: 310,
-                  category: 'Produit Niche',
-                  sampleAvailable: true,
-                  rating: 4.9,
-                },
-              ],
-              affiliates: [
-                {
-                  id: `${data.id}-aff-1`,
-                  brand: `Partenaire ${data.name}`,
-                  offer: '15% de commission',
-                  payout: '15% net',
-                  conversionRate: '4.2%',
-                  status: 'Top Performer',
-                  link: 'https://creators.tiktok.com/custom',
-                },
-              ],
-              accounts: [
-                {
-                  id: `${data.id}-acc-1`,
-                  handle: `@tikvo_${data.name.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
-                  displayName: `${data.name} Master Studio`,
-                  avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-                  nicheId: data.id,
-                  followers: 32400,
-                  totalLikes: '840K',
-                  avgViews: '45K',
-                  engagementRate: '9.4%',
-                  apiConnected: true,
-                  autoPostEnabled: true,
-                  shadowbanRisk: 'Aucun',
-                  creatorRewardsEligible: true,
-                },
-              ],
-              targetAudience: {
-                ageRange: data.targetAudience || '18 - 35 ans',
-                genderRatio: '50% Hommes / 50% Femmes',
-                peakHours: ['12:30', '18:30', '21:00'],
-                topGeo: ['France', 'Belgique', 'Suisse'],
-              },
-            };
-          }
-        });
-        setFirestoreCustomNiches(nichesMap);
-      },
-      (error) => {
-        handleFirestoreError(error, OperationType.GET, nichesPath);
-      }
-    );
+              };
+            }
+          });
+          setFirestoreCustomNiches(nichesMap);
+        },
+        (error) => {
+          handleFirestoreError(error, OperationType.GET, nichesPath);
+        }
+      );
 
-    return () => unsubscribe();
+      return () => unsubscribe();
+    } catch (err) {
+      console.warn('[Firebase] Erreur listener niches:', err);
+    }
   }, [user]);
 
-  // Listen to scheduled posts if authenticated
+  // 3. Listen to scheduled posts if authenticated and db is ready
   useEffect(() => {
-    if (!user) return;
+    if (!isFirebaseConfigured || !db || !user) return;
 
     const postsPath = `users/${user.uid}/scheduledPosts`;
-    const postsCol = collection(db, 'users', user.uid, 'scheduledPosts');
+    try {
+      const postsCol = collection(db, 'users', user.uid, 'scheduledPosts');
 
-    const unsubscribe = onSnapshot(
-      postsCol,
-      (snapshot) => {
-        const postsList: ScheduledPost[] = [];
-        snapshot.docs.forEach((docSnap) => {
-          const data = docSnap.data() as ScheduledPost;
-          if (data && data.id) {
-            postsList.push(data);
-          }
-        });
-        setFirestoreScheduledPosts(postsList);
-      },
-      (error) => {
-        handleFirestoreError(error, OperationType.GET, postsPath);
-      }
-    );
+      const unsubscribe = onSnapshot(
+        postsCol,
+        (snapshot) => {
+          const postsList: ScheduledPost[] = [];
+          snapshot.docs.forEach((docSnap) => {
+            const data = docSnap.data() as ScheduledPost;
+            if (data && data.id) {
+              postsList.push(data);
+            }
+          });
+          setFirestoreScheduledPosts(postsList);
+        },
+        (error) => {
+          handleFirestoreError(error, OperationType.GET, postsPath);
+        }
+      );
 
-    return () => unsubscribe();
+      return () => unsubscribe();
+    } catch (err) {
+      console.warn('[Firebase] Erreur listener posts:', err);
+    }
   }, [user]);
 
   const signInWithGoogle = async () => {
+    if (!isFirebaseConfigured || !auth || !googleProvider) {
+      console.warn('[Firebase] Configuration manquante : connexion cloud indisponible en mode hors-ligne.');
+      return;
+    }
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (err) {
@@ -256,6 +293,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const logout = async () => {
+    if (!auth) return;
     try {
       await signOut(auth);
     } catch (err) {
@@ -264,7 +302,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const saveCustomNiche = async (niche: NicheData) => {
-    if (!user) return;
+    if (!isFirebaseConfigured || !db || !user) return;
     const path = `users/${user.uid}/customNiches/${niche.id}`;
     try {
       const nicheDoc = doc(db, 'users', user.uid, 'customNiches', niche.id);
@@ -286,7 +324,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const saveScheduledPost = async (post: ScheduledPost) => {
-    if (!user) return;
+    if (!isFirebaseConfigured || !db || !user) return;
     const path = `users/${user.uid}/scheduledPosts/${post.id}`;
     try {
       const postDoc = doc(db, 'users', user.uid, 'scheduledPosts', post.id);
@@ -301,7 +339,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const removeScheduledPost = async (postId: string) => {
-    if (!user) return;
+    if (!isFirebaseConfigured || !db || !user) return;
     const path = `users/${user.uid}/scheduledPosts/${postId}`;
     try {
       const postDoc = doc(db, 'users', user.uid, 'scheduledPosts', postId);
@@ -316,6 +354,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       value={{
         user,
         loading,
+        isFirebaseConfigured,
         signInWithGoogle,
         logout,
         saveCustomNiche,

@@ -23,6 +23,7 @@ function TikvoDashboard() {
 
   const {
     user,
+    isFirebaseConfigured,
     saveCustomNiche,
     saveScheduledPost,
     firestoreCustomNiches,
@@ -54,17 +55,17 @@ function TikvoDashboard() {
   // Active Niche State
   const [selectedNiche, setSelectedNiche] = useState<NicheId>('mode');
 
-  // Active Main Navigation View (derived and synced with Router)
+  // Active Main Navigation View (derived and synced with HashRouter)
   const [currentView, setCurrentView] = useState<string>(() => {
-    const raw = window.location.pathname.replace(/^\/tikvo\/?/, '').replace(/\/$/, '');
-    return ['dashboard', 'radar', 'factory', 'accounts', 'calendar', 'monetization', 'settings'].includes(raw)
-      ? raw
+    const hashRoute = window.location.hash.replace(/^#\/?/, '').split('?')[0].split('/')[0];
+    return ['dashboard', 'radar', 'factory', 'accounts', 'calendar', 'monetization', 'settings'].includes(hashRoute)
+      ? hashRoute
       : 'dashboard';
   });
 
   // Sync route with currentView
   useEffect(() => {
-    const rawPath = location.pathname.replace(/^\//, '').replace(/\/$/, '');
+    const rawPath = location.pathname.replace(/^\//, '').split('/')[0];
     if (['dashboard', 'radar', 'factory', 'accounts', 'calendar', 'monetization', 'settings'].includes(rawPath)) {
       setCurrentView(rawPath);
     } else if (!rawPath) {
@@ -120,7 +121,6 @@ function TikvoDashboard() {
   // Combine scheduled posts with Firestore real-time collection if authenticated
   const scheduledPosts = useMemo(() => {
     if (user && firestoreScheduledPosts.length > 0) {
-      // Merge unique by ID
       const map = new Map<string, ScheduledPost>();
       localScheduledPosts.forEach((p) => map.set(p.id, p));
       firestoreScheduledPosts.forEach((p) => map.set(p.id, p));
@@ -166,12 +166,12 @@ function TikvoDashboard() {
       return updated;
     });
 
-    // Save to Firestore if user is authenticated
-    if (user) {
+    // Save to Firestore if user is authenticated and configured
+    if (user && isFirebaseConfigured) {
       try {
         await saveCustomNiche(newNiche);
       } catch (err) {
-        console.warn('[Firestore] Failed saving custom niche, saved locally:', err);
+        console.warn('[Firestore] Sauvegarde locale conservée:', err);
       }
     }
 
@@ -212,11 +212,11 @@ function TikvoDashboard() {
   const handleSchedulePost = async (newPost: ScheduledPost) => {
     setLocalScheduledPosts((prev) => [newPost, ...prev]);
 
-    if (user) {
+    if (user && isFirebaseConfigured) {
       try {
         await saveScheduledPost(newPost);
       } catch (err) {
-        console.warn('[Firestore] Failed saving scheduled post, saved locally:', err);
+        console.warn('[Firestore] Sauvegarde locale conservée:', err);
       }
     }
   };
@@ -250,6 +250,28 @@ function TikvoDashboard() {
 
         {/* 3. Dynamic Views */}
         <main className="flex-1 p-6 lg:p-8 ml-64 overflow-y-auto">
+          {/* Alerte si la configuration Firebase est manquante */}
+          {!isFirebaseConfigured && (
+            <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 flex items-center justify-between text-amber-200 text-xs sm:text-sm shadow-lg shadow-amber-950/20">
+              <div className="flex items-center gap-3">
+                <span className="flex h-3 w-3 relative flex-shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                </span>
+                <div>
+                  <span className="font-bold text-amber-300">Config Firebase manquante</span>
+                  <span className="mx-1.5 text-amber-500">•</span>
+                  <span className="text-gray-300">
+                    Mode local actif. Vos niches, scripts et posts sont enregistrés dans ce navigateur.
+                  </span>
+                </div>
+              </div>
+              <span className="text-amber-400/80 text-[11px] hidden md:inline bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20 font-mono">
+                Secrets VITE_FIREBASE_* optionnels
+              </span>
+            </div>
+          )}
+
           {currentView === 'dashboard' && (
             <DashboardView
               niche={currentNicheData}
