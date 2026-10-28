@@ -1,3 +1,4 @@
+
 name: Deploy tikvo to Pages
 on:
   push:
@@ -21,9 +22,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install
-      - run: npm run build
-      - uses: actions/upload-pages-artifact@v3
+      - name: Clean npm cache
+        run: npm cache clean --force
+      - name: Install deps
+        run: npm install --legacy-peer-deps
+      - name: Build tikvo
+        run: npm run build
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
           path: ./dist
   deploy:
@@ -35,3 +41,4 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
