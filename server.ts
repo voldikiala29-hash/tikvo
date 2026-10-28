@@ -26,21 +26,23 @@ async function startServer() {
 
       console.log(`[tikvo Engine] Generating 1080x1920 video for niche "${niche}" with keywords:`, keywords);
 
-      // Curated video URL fallback or rendered output
+      // Le rendu Remotion côté serveur n'est pas encore branché : on le dit
+      // clairement au lieu de renvoyer une fausse vidéo "rendue".
+      // Le front garde alors le clip Pexels sélectionné comme aperçu.
       const renderId = 'tikvo_render_' + Math.random().toString(36).substring(2, 9);
-      const generatedVideoUrl = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
 
       res.json({
         success: true,
+        simulated: true,
         renderId,
-        videoUrl: generatedVideoUrl,
+        videoUrl: null,
         niche,
         hook,
         fps: 30,
         resolution: '1080x1920',
         duration: 30,
-        status: 'RENDER_COMPLETED',
-        message: 'Vidéo 9:16 rendue avec succès via Remotion + edge-tts + Pexels',
+        status: 'RENDER_NOT_IMPLEMENTED',
+        message: 'Rendu serveur non implémenté : aucune vidéo n\'a été générée (réponse simulée).',
       });
     } catch (error: any) {
       console.error('[tikvo Engine Error]', error);
@@ -52,19 +54,16 @@ async function startServer() {
   // Posts or schedules video directly to TikTok Business Direct Post API
   app.post('/api/tiktok/post', async (req, res) => {
     try {
-      const { videoUrl, caption, privacyLevel = 'PUBLIC_TO_EVERYONE' } = req.body;
+      const { caption, privacyLevel = 'PUBLIC_TO_EVERYONE' } = req.body;
 
-      console.log('[tikvo TikTok API] Publishing video:', { caption, privacyLevel });
+      console.log('[tikvo TikTok API] Publish request received:', { caption, privacyLevel });
 
-      const publishId = 'pub_' + Math.random().toString(36).substring(2, 11);
-      const shareUrl = 'https://www.tiktok.com/@tikvo_pro/video/' + Math.floor(100000000000000000 + Math.random() * 900000000000000000);
-
-      res.json({
-        success: true,
-        publishId,
-        shareUrl,
-        status: 'PROCESSING_UPLOAD',
-        message: 'Vidéo transmise avec succès à TikTok Business API',
+      // Aucun appel à TikTok n'est fait ici (OAuth + Direct Post API à implémenter).
+      // On répond 501 plutôt que d'inventer un publishId / un lien TikTok.
+      res.status(501).json({
+        success: false,
+        error: 'NOT_IMPLEMENTED',
+        message: 'La publication TikTok réelle n\'est pas encore implémentée : rien n\'a été publié.',
       });
     } catch (error: any) {
       console.error('[TikTok Post Error]', error);

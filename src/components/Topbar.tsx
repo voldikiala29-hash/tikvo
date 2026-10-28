@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   Zap,
   LogOut,
+  Menu,
 } from 'lucide-react';
 import { NicheData, NicheId } from '../types/tiktok';
 import { useFirebase } from '../contexts/FirebaseContext';
@@ -20,6 +21,7 @@ interface TopbarProps {
   onGenerate10Ideas: () => void;
   isTikTokConnected: boolean;
   onOpenConnectModal: () => void;
+  onOpenMenu: () => void;
 }
 
 export const Topbar: React.FC<TopbarProps> = ({
@@ -30,24 +32,32 @@ export const Topbar: React.FC<TopbarProps> = ({
   onGenerate10Ideas,
   isTikTokConnected,
   onOpenConnectModal,
+  onOpenMenu,
 }) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const currentNiche = niches[selectedNiche] || niches.mode;
   const { user, logout, isFirebaseConfigured, setIsFirebaseModalOpen, authLoading, isDemoUser } = useFirebase();
 
   return (
-    <header className="h-16 border-b border-white/5 bg-[#08080D]/90 backdrop-blur-xl sticky top-0 z-20 px-6 flex items-center justify-between ml-64">
-      {/* Left side: Niche Selector Dropdown */}
-      <div className="flex items-center gap-4">
-        <div className="relative">
+    <header className="h-16 border-b border-white/5 bg-[#08080D]/90 backdrop-blur-xl sticky top-0 z-20 px-3 sm:px-6 flex items-center justify-between gap-2 lg:ml-64">
+      {/* Left side: Menu (mobile) + Niche Selector Dropdown */}
+      <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+        <button
+          onClick={onOpenMenu}
+          aria-label="Ouvrir le menu"
+          className="lg:hidden p-2 rounded-xl bg-[#12121A] border border-white/10 text-white shrink-0"
+        >
+          <Menu size={18} />
+        </button>
+        <div className="relative min-w-0">
           <button
             onClick={() => setDropdownOpen(!dropdownOpen)}
-            className="flex items-center gap-2.5 px-4 py-2 rounded-xl bg-[#12121A] border border-white/10 hover:border-[#00FFC6]/40 transition-all text-sm font-semibold text-white shadow-sm"
+            className="flex items-center gap-2 sm:gap-2.5 px-3 sm:px-4 py-2 rounded-xl bg-[#12121A] border border-white/10 hover:border-[#00FFC6]/40 transition-all text-sm font-semibold text-white shadow-sm max-w-full"
           >
             <span className="text-xl">{currentNiche.emoji}</span>
-            <div className="text-left">
-              <span className="text-xs text-gray-400 block -mb-0.5 font-normal">Niche active :</span>
-              <span className="font-bold text-white text-sm">{currentNiche.name}</span>
+            <div className="text-left min-w-0">
+              <span className="text-xs text-gray-400 -mb-0.5 font-normal hidden sm:block">Niche active :</span>
+              <span className="font-bold text-white text-sm block truncate max-w-[110px] sm:max-w-none">{currentNiche.name}</span>
             </div>
             <ChevronDown
               size={16}
@@ -64,7 +74,7 @@ export const Topbar: React.FC<TopbarProps> = ({
               />
 
               {/* Menu */}
-              <div className="absolute left-0 mt-2 w-72 rounded-2xl bg-[#12121A] border border-white/10 shadow-2xl shadow-black/80 p-2 z-20 backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-150">
+              <div className="absolute left-0 mt-2 w-[calc(100vw-1.5rem)] max-w-72 sm:w-72 rounded-2xl bg-[#12121A] border border-white/10 shadow-2xl shadow-black/80 p-2 z-20 backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-150">
                 <div className="px-3 py-2 text-[10px] uppercase font-bold text-gray-400 tracking-wider">
                   Changer de Niche TikTok
                 </div>
@@ -122,18 +132,22 @@ export const Topbar: React.FC<TopbarProps> = ({
       </div>
 
       {/* Right side: Action Buttons */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
         {/* Generate 10 Viral Ideas CTA Button */}
         <button
           onClick={onGenerate10Ideas}
-          className="relative group overflow-hidden px-4 py-2 rounded-xl bg-gradient-to-r from-[#00FFC6] via-[#7C3AED] to-[#FF2E93] p-[1.5px] transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-[#00FFC6]/10"
+          aria-label={`Générer 10 idées virales pour ${currentNiche.name}`}
+          className="relative group overflow-hidden px-1 sm:px-4 py-1 sm:py-2 rounded-xl bg-gradient-to-r from-[#00FFC6] via-[#7C3AED] to-[#FF2E93] p-[1.5px] transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-[#00FFC6]/10"
         >
-          <div className="w-full h-full bg-[#08080D] group-hover:bg-[#08080D]/80 rounded-[10px] px-3.5 py-1.5 flex items-center gap-2 transition-all">
+          <div className="w-full h-full bg-[#08080D] group-hover:bg-[#08080D]/80 rounded-[10px] px-2.5 sm:px-3.5 py-1.5 flex items-center gap-2 transition-all">
             <Sparkles size={15} className="text-[#00FFC6] group-hover:rotate-12 transition-transform" />
-            <span className="text-xs font-bold text-white tracking-wide">
+            <span className="text-xs font-bold text-white tracking-wide hidden xl:inline">
               Générer 10 idées virales pour {currentNiche.name}
             </span>
-            <span className="text-xs">{currentNiche.emoji}</span>
+            <span className="text-xs font-bold text-white tracking-wide hidden sm:inline xl:hidden">
+              10 idées virales
+            </span>
+            <span className="text-xs hidden sm:inline">{currentNiche.emoji}</span>
           </div>
         </button>
 
@@ -154,7 +168,7 @@ export const Topbar: React.FC<TopbarProps> = ({
           ) : (
             <>
               <Radio size={14} className="animate-pulse" />
-              <span>Connecter TikTok</span>
+              <span className="hidden sm:inline">Connecter TikTok</span>
             </>
           )}
         </button>

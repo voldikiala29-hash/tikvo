@@ -25,6 +25,8 @@ interface SidebarProps {
   onOpenCustomNicheModal: () => void;
   isTikTokConnected: boolean;
   onOpenConnectModal: () => void;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -36,6 +38,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenCustomNicheModal,
   isTikTokConnected,
   onOpenConnectModal,
+  isOpen,
+  onClose,
 }) => {
   const { user, isDemoUser, setIsFirebaseModalOpen } = useFirebase();
   const navItems = [
@@ -51,7 +55,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const currentNicheObj = niches[selectedNiche] || niches.mode;
 
   return (
-    <aside className="w-64 bg-[#12121A]/95 border-r border-white/5 flex flex-col h-screen fixed left-0 top-0 z-30 select-none backdrop-blur-xl">
+    <>
+    {/* Mobile backdrop */}
+    {isOpen && (
+      <div
+        className="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm lg:hidden"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+    )}
+    <aside
+      className={`w-64 bg-[#12121A] lg:bg-[#12121A]/95 border-r border-white/5 flex flex-col h-screen fixed left-0 top-0 z-40 lg:z-30 select-none backdrop-blur-xl transition-transform duration-200 ${
+        isOpen ? 'translate-x-0' : '-translate-x-full'
+      } lg:translate-x-0`}
+    >
       {/* Brand Header */}
       <div className="p-5 border-b border-white/5">
         <div className="flex items-center gap-3">
@@ -252,5 +269,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
     </aside>
+    </>
   );
 };

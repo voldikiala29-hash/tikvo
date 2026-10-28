@@ -74,7 +74,11 @@ function TikvoDashboard() {
     }
   }, [location.pathname]);
 
+  // Mobile sidebar (off-canvas under the lg breakpoint)
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
+
   const handleNavigateView = (view: string) => {
+    setIsSidebarOpen(false);
     setCurrentView(view);
     navigate(view === 'dashboard' ? '/' : `/${view}`);
   };
@@ -234,6 +238,8 @@ function TikvoDashboard() {
         onOpenCustomNicheModal={() => setIsCustomNicheModalOpen(true)}
         isTikTokConnected={isTikTokConnected}
         onOpenConnectModal={() => setIsConnectModalOpen(true)}
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
       />
 
       {/* Main Content Area */}
@@ -247,10 +253,11 @@ function TikvoDashboard() {
           onGenerate10Ideas={handleOpen10Ideas}
           isTikTokConnected={isTikTokConnected}
           onOpenConnectModal={() => setIsConnectModalOpen(true)}
+          onOpenMenu={() => setIsSidebarOpen(true)}
         />
 
         {/* 3. Dynamic Views */}
-        <main className="flex-1 p-6 lg:p-8 ml-64 overflow-y-auto">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 lg:ml-64 overflow-y-auto">
           {/* Alerte si la configuration Firebase est manquante */}
           {!isFirebaseConfigured && (
             <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 flex items-center justify-between text-amber-200 text-xs sm:text-sm shadow-lg shadow-amber-950/20">
