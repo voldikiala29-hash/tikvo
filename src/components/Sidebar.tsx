@@ -53,22 +53,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Brand Header */}
       <div className="p-5 border-b border-white/5">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#00FFC6] via-[#7C3AED] to-[#FF2E93] p-[2px] shadow-lg shadow-[#00FFC6]/20">
-            <div className="w-full h-full bg-[#08080D] rounded-[10px] flex items-center justify-center">
-              <span className="text-xl font-black bg-gradient-to-r from-[#00FFC6] to-[#FF2E93] bg-clip-text text-transparent">
-                V
-              </span>
+          <div className="w-10 h-10 rounded-xl bg-[#08080D] border border-[#00FFC6]/40 p-1 shadow-lg shadow-[#00FFC6]/25 flex items-center justify-center relative group">
+            {/* Animated Equalizer in Logo */}
+            <div className="flex items-end gap-0.5 h-5">
+              <span className="w-1 bg-[#00FFC6] rounded-full wave-bar-1"></span>
+              <span className="w-1 bg-[#00FFC6] rounded-full wave-bar-2"></span>
+              <span className="w-1 bg-[#FF2E93] rounded-full wave-bar-3"></span>
+              <span className="w-1 bg-[#7C3AED] rounded-full wave-bar-4"></span>
+              <span className="w-1 bg-[#00FFC6] rounded-full wave-bar-5"></span>
             </div>
+            <div className="absolute inset-0 rounded-xl bg-[#00FFC6]/10 blur-sm pointer-events-none"></div>
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="font-black text-lg tracking-tight text-white">Tikokvoldi</span>
-              <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-md bg-[#FF2E93]/20 text-[#FF2E93] border border-[#FF2E93]/30">
-                PRO
+              <span className="font-black text-xl tracking-tight text-white lowercase">
+                tikvo<span className="text-[#00FFC6]">.</span>
+              </span>
+              <span className="px-1.5 py-0.5 text-[9px] font-extrabold rounded-md bg-[#00FFC6]/15 text-[#00FFC6] border border-[#00FFC6]/30 uppercase">
+                dark luxe
               </span>
             </div>
             <p className="text-[11px] text-gray-400 font-medium truncate max-w-[150px]">
-              Universal Viral Manager
+              tiktok viral & auto-post
             </p>
           </div>
         </div>

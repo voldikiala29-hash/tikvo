@@ -168,7 +168,7 @@ export class TikTokBusinessApiService {
     return {
       publishId: 'pub_' + Math.random().toString(36).substring(2, 10),
       status: 'SUCCESS',
-      shareUrl: 'https://www.tiktok.com/@voldistyle/video/' + Math.floor(100000000000000000 + Math.random() * 900000000000000000),
+      shareUrl: 'https://www.tiktok.com/@tikvo_pro/video/' + Math.floor(100000000000000000 + Math.random() * 900000000000000000),
     };
   }
 
@@ -180,10 +180,10 @@ export class TikTokBusinessApiService {
     console.log('[TikTok API] Querying creator profile information & insights');
     // Prepared stub for user info
     return {
-      openId: this.config.openId || 'voldi_creator_001',
-      unionId: 'union_voldi_001',
+      openId: this.config.openId || 'tikvo_creator_001',
+      unionId: 'union_tikvo_001',
       avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-      displayName: 'Tikokvoldi Verified Studio',
+      displayName: 'tikvo verified studio',
       followerCount: 248900,
       followingCount: 342,
       likesCount: 6840000,

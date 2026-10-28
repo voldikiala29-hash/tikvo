@@ -77,7 +77,7 @@ export const CustomNicheModal: React.FC<CustomNicheModalProps> = ({
         {
           id: `${nicheId}-snd-1`,
           title: `Viral Pulse for ${name}`,
-          artist: 'Tikokvoldi Sounds',
+          artist: 'tikvo Sounds',
           usageCount: '142.0K',
           growth: '+210%',
           isHot: true,
@@ -133,7 +133,7 @@ export const CustomNicheModal: React.FC<CustomNicheModalProps> = ({
       accounts: [
         {
           id: `${nicheId}-acc-1`,
-          handle: `@voldi_${name.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
+          handle: `@tikvo_${name.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
           displayName: `${name} Master Studio`,
           avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
           nicheId: nicheId,

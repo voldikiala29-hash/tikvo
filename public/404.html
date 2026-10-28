@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>tikvo - universal tiktok viral manager & auto-poster</title>
+    <meta name="description" content="tikvo - SaaS dark luxe pour gérer toutes les niches TikTok, générer des vidéos virales 9:16 avec Remotion et poster automatiquement." />
+    <meta property="og:title" content="tikvo - universal tiktok viral manager & auto-poster" />
+    <meta property="og:description" content="tikvo - SaaS dark luxe pour gérer toutes les niches TikTok, générer des vidéos virales 9:16 avec Remotion et poster automatiquement." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script type="text/javascript">
+      // Single Page Apps for GitHub Pages SPA redirection handler
+      // Keeps path and query params intact when refreshed on GitHub Pages
+      var segmentCount = 1;
+      var l = window.location;
+      if (l.search[1] === '/' ) {
+        var decoded = l.search.slice(1).split('&').map(function(s) { 
+          return s.replace(/~and~/g, '&')
+        }).join('?');
+        window.history.replaceState(null, null,
+            l.pathname.slice(0, -1) + decoded + l.hash
+        );
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

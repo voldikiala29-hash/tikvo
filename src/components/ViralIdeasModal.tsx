@@ -59,7 +59,7 @@ export const ViralIdeasModal: React.FC<ViralIdeasModalProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `tikokvoldi-10-idees-${niche.id}.txt`;
+    link.download = `tikvo-10-idees-${niche.id}.txt`;
     link.click();
     URL.revokeObjectURL(url);
   };

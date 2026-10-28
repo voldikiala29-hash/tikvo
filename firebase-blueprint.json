@@ -1,0 +1,280 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User account profile document storing identity details",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The unique Firebase Auth user identifier",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "User email address",
+          "maxLength": 256
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User public display name",
+          "maxLength": 100
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "Avatar image URL",
+          "maxLength": 1024
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the user account was created"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of the last profile update"
+        }
+      },
+      "required": ["uid", "email", "createdAt"]
+    },
+    "CustomNiche": {
+      "title": "CustomNiche",
+      "description": "User-created customized TikTok niche configuration",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique niche document ID",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user UID",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the custom niche",
+          "maxLength": 80
+        },
+        "emoji": {
+          "type": "string",
+          "description": "Representative emoji icon",
+          "maxLength": 16
+        },
+        "tagline": {
+          "type": "string",
+          "description": "Niche tagline / theme description",
+          "maxLength": 250
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed niche overview",
+          "maxLength": 500
+        },
+        "targetAudience": {
+          "type": "string",
+          "description": "Target demographic range",
+          "maxLength": 80
+        },
+        "firstHashtag": {
+          "type": "string",
+          "description": "Primary hashtag for the niche",
+          "maxLength": 60
+        },
+        "firstHook": {
+          "type": "string",
+          "description": "Sample psychological viral hook",
+          "maxLength": 250
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": ["id", "userId", "name", "emoji", "createdAt"]
+    },
+    "ScheduledPost": {
+      "title": "ScheduledPost",
+      "description": "TikTok post queued or scheduled for publishing",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique scheduled post ID",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Creator user UID",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "accountId": {
+          "type": "string",
+          "description": "Target TikTok account identifier",
+          "maxLength": 128
+        },
+        "accountHandle": {
+          "type": "string",
+          "description": "TikTok account handle",
+          "maxLength": 80
+        },
+        "nicheId": {
+          "type": "string",
+          "description": "Associated niche identifier",
+          "maxLength": 80
+        },
+        "title": {
+          "type": "string",
+          "description": "Post or video concept title",
+          "maxLength": 150
+        },
+        "hook": {
+          "type": "string",
+          "description": "Viral hook for first 3 seconds",
+          "maxLength": 250
+        },
+        "caption": {
+          "type": "string",
+          "description": "Full TikTok post caption with hashtags",
+          "maxLength": 2200
+        },
+        "soundTitle": {
+          "type": "string",
+          "description": "Trending audio sound title",
+          "maxLength": 120
+        },
+        "scheduledDate": {
+          "type": "string",
+          "description": "Date of publication in YYYY-MM-DD",
+          "maxLength": 30
+        },
+        "scheduledTime": {
+          "type": "string",
+          "description": "Time of publication in HH:mm",
+          "maxLength": 20
+        },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "queued", "published"],
+          "description": "Current status of the post"
+        },
+        "format": {
+          "type": "string",
+          "description": "Video format structure",
+          "maxLength": 100
+        },
+        "duration": {
+          "type": "string",
+          "description": "Video duration e.g. 15s or 30s",
+          "maxLength": 30
+        },
+        "thumbnailGradient": {
+          "type": "string",
+          "description": "Visual card gradient classes",
+          "maxLength": 100
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": ["id", "userId", "title", "status", "createdAt"]
+    },
+    "GeneratedScript": {
+      "title": "GeneratedScript",
+      "description": "AI-generated TikTok script draft with sequenced breakdown",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique script document ID",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user UID",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "nicheId": {
+          "type": "string",
+          "description": "Niche ID",
+          "maxLength": 80
+        },
+        "title": {
+          "type": "string",
+          "description": "Script title",
+          "maxLength": 150
+        },
+        "hook": {
+          "type": "string",
+          "description": "Selected hook text",
+          "maxLength": 250
+        },
+        "cta": {
+          "type": "string",
+          "description": "Call to action goal",
+          "maxLength": 100
+        },
+        "duration": {
+          "type": "string",
+          "description": "Target duration",
+          "maxLength": 30
+        },
+        "tone": {
+          "type": "string",
+          "description": "Tone style",
+          "maxLength": 50
+        },
+        "scriptText": {
+          "type": "string",
+          "description": "Full assembled script narrative text",
+          "maxLength": 5000
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": ["id", "userId", "title", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/User"
+      },
+      "description": "User profile document containing authentication and account identity"
+    },
+    "/users/{userId}/customNiches/{nicheId}": {
+      "schema": {
+        "$ref": "#/entities/CustomNiche"
+      },
+      "description": "Custom TikTok niches created by the authenticated user"
+    },
+    "/users/{userId}/scheduledPosts/{postId}": {
+      "schema": {
+        "$ref": "#/entities/ScheduledPost"
+      },
+      "description": "Scheduled and published TikTok video posts belonging to the user"
+    },
+    "/users/{userId}/generatedScripts/{scriptId}": {
+      "schema": {
+        "$ref": "#/entities/GeneratedScript"
+      },
+      "description": "Saved AI video script generations and outlines"
+    }
+  }
+}

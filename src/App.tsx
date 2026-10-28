@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Topbar } from './components/Topbar';
 import { ViralIdeasModal } from './components/ViralIdeasModal';
@@ -14,12 +14,25 @@ import { SettingsView } from './views/SettingsView';
 import { INITIAL_NICHES, generate10ViralIdeas } from './data/nichesData';
 import { NicheData, NicheId, ScheduledPost, ViralIdea } from './types/tiktok';
 import { tikTokApiService } from './services/tiktokApiService';
+import { FirebaseProvider, useFirebase } from './contexts/FirebaseContext';
+import { useLocation, useNavigate } from 'react-router-dom';
 
-export default function App() {
+function TikvoDashboard() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const {
+    user,
+    saveCustomNiche,
+    saveScheduledPost,
+    firestoreCustomNiches,
+    firestoreScheduledPosts,
+  } = useFirebase();
+
   // Load saved custom niches from localStorage if any
-  const [niches, setNiches] = useState<Record<string, NicheData>>(() => {
+  const [localNiches, setLocalNiches] = useState<Record<string, NicheData>>(() => {
     try {
-      const saved = localStorage.getItem('TIKOKVOLDI_NICHES');
+      const saved = localStorage.getItem('TIKVO_NICHES') || localStorage.getItem('TIKOKVOLDI_NICHES');
       if (saved) {
         return { ...INITIAL_NICHES, ...JSON.parse(saved) };
       }
@@ -29,11 +42,40 @@ export default function App() {
     return INITIAL_NICHES;
   });
 
+  // Combine initial niches, local niches, and real-time Firestore niches
+  const niches = useMemo(() => {
+    return {
+      ...INITIAL_NICHES,
+      ...localNiches,
+      ...firestoreCustomNiches,
+    };
+  }, [localNiches, firestoreCustomNiches]);
+
   // Active Niche State
   const [selectedNiche, setSelectedNiche] = useState<NicheId>('mode');
 
-  // Active Main Navigation View
-  const [currentView, setCurrentView] = useState<string>('dashboard');
+  // Active Main Navigation View (derived and synced with Router)
+  const [currentView, setCurrentView] = useState<string>(() => {
+    const raw = window.location.pathname.replace(/^\/tikvo\/?/, '').replace(/\/$/, '');
+    return ['dashboard', 'radar', 'factory', 'accounts', 'calendar', 'monetization', 'settings'].includes(raw)
+      ? raw
+      : 'dashboard';
+  });
+
+  // Sync route with currentView
+  useEffect(() => {
+    const rawPath = location.pathname.replace(/^\//, '').replace(/\/$/, '');
+    if (['dashboard', 'radar', 'factory', 'accounts', 'calendar', 'monetization', 'settings'].includes(rawPath)) {
+      setCurrentView(rawPath);
+    } else if (!rawPath) {
+      setCurrentView('dashboard');
+    }
+  }, [location.pathname]);
+
+  const handleNavigateView = (view: string) => {
+    setCurrentView(view);
+    navigate(view === 'dashboard' ? '/' : `/${view}`);
+  };
 
   // TikTok API Connection State
   const [isTikTokConnected, setIsTikTokConnected] = useState<boolean>(() =>
@@ -45,10 +87,10 @@ export default function App() {
   const [isConnectModalOpen, setIsConnectModalOpen] = useState<boolean>(false);
   const [isCustomNicheModalOpen, setIsCustomNicheModalOpen] = useState<boolean>(false);
 
-  // Scheduled posts storage
-  const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>(() => {
+  // Scheduled posts storage (localStorage fallback)
+  const [localScheduledPosts, setLocalScheduledPosts] = useState<ScheduledPost[]>(() => {
     try {
-      const saved = localStorage.getItem('TIKOKVOLDI_SCHEDULED_POSTS');
+      const saved = localStorage.getItem('TIKVO_SCHEDULED_POSTS') || localStorage.getItem('TIKOKVOLDI_SCHEDULED_POSTS');
       if (saved) {
         return JSON.parse(saved);
       }
@@ -59,7 +101,7 @@ export default function App() {
       {
         id: 'init-post-1',
         accountId: 'acc-m1',
-        accountHandle: '@voldi_fashion_pro',
+        accountHandle: '@tikvo_fashion_pro',
         nicheId: 'mode',
         title: '3 tenues avec 1 seule pièce',
         hook: 'Arrête d’acheter 50 pantalons : voici 3 tenues d’élite.',
@@ -74,6 +116,18 @@ export default function App() {
       },
     ];
   });
+
+  // Combine scheduled posts with Firestore real-time collection if authenticated
+  const scheduledPosts = useMemo(() => {
+    if (user && firestoreScheduledPosts.length > 0) {
+      // Merge unique by ID
+      const map = new Map<string, ScheduledPost>();
+      localScheduledPosts.forEach((p) => map.set(p.id, p));
+      firestoreScheduledPosts.forEach((p) => map.set(p.id, p));
+      return Array.from(map.values());
+    }
+    return localScheduledPosts;
+  }, [user, firestoreScheduledPosts, localScheduledPosts]);
 
   // Preloaded item for Content Factory when transitioning from Radar or 10 Ideas
   const [factoryPreloadedItem, setFactoryPreloadedItem] = useState<any>(undefined);
@@ -91,26 +145,36 @@ export default function App() {
     setViralIdeas(generate10ViralIdeas(selectedNiche, currentNicheData));
   }, [selectedNiche, currentNicheData]);
 
-  // Persist scheduled posts
+  // Persist local scheduled posts
   useEffect(() => {
     try {
-      localStorage.setItem('TIKOKVOLDI_SCHEDULED_POSTS', JSON.stringify(scheduledPosts));
+      localStorage.setItem('TIKVO_SCHEDULED_POSTS', JSON.stringify(localScheduledPosts));
     } catch (e) {
       console.error(e);
     }
-  }, [scheduledPosts]);
+  }, [localScheduledPosts]);
 
-  // Add a newly created custom niche
-  const handleAddCustomNiche = (newNiche: NicheData) => {
-    setNiches((prev) => {
+  // Add a newly created custom niche (syncs to LocalStorage and Firestore)
+  const handleAddCustomNiche = async (newNiche: NicheData) => {
+    setLocalNiches((prev) => {
       const updated = { ...prev, [newNiche.id]: newNiche };
       try {
-        localStorage.setItem('TIKOKVOLDI_NICHES', JSON.stringify(updated));
+        localStorage.setItem('TIKVO_NICHES', JSON.stringify(updated));
       } catch (e) {
         console.error(e);
       }
       return updated;
     });
+
+    // Save to Firestore if user is authenticated
+    if (user) {
+      try {
+        await saveCustomNiche(newNiche);
+      } catch (err) {
+        console.warn('[Firestore] Failed saving custom niche, saved locally:', err);
+      }
+    }
+
     setSelectedNiche(newNiche.id);
   };
 
@@ -135,17 +199,26 @@ export default function App() {
       },
     });
     setIsViralIdeasModalOpen(false);
-    setCurrentView('factory');
+    handleNavigateView('factory');
   };
 
   // Transfer item from Radar Viral table to Content Factory
   const handleSelectRadarItemForFactory = (item: any) => {
     setFactoryPreloadedItem(item);
-    setCurrentView('factory');
+    handleNavigateView('factory');
   };
 
-  const handleSchedulePost = (newPost: ScheduledPost) => {
-    setScheduledPosts((prev) => [newPost, ...prev]);
+  // Schedule a post (syncs to LocalStorage and Firestore)
+  const handleSchedulePost = async (newPost: ScheduledPost) => {
+    setLocalScheduledPosts((prev) => [newPost, ...prev]);
+
+    if (user) {
+      try {
+        await saveScheduledPost(newPost);
+      } catch (err) {
+        console.warn('[Firestore] Failed saving scheduled post, saved locally:', err);
+      }
+    }
   };
 
   return (
@@ -153,7 +226,7 @@ export default function App() {
       {/* 1. Left Sidebar */}
       <Sidebar
         currentView={currentView}
-        setCurrentView={setCurrentView}
+        setCurrentView={handleNavigateView}
         selectedNiche={selectedNiche}
         setSelectedNiche={setSelectedNiche}
         niches={niches}
@@ -180,7 +253,7 @@ export default function App() {
           {currentView === 'dashboard' && (
             <DashboardView
               niche={currentNicheData}
-              onNavigate={(view) => setCurrentView(view)}
+              onNavigate={handleNavigateView}
               onGenerate10Ideas={handleOpen10Ideas}
               scheduledPosts={scheduledPosts}
             />
@@ -213,7 +286,7 @@ export default function App() {
               niche={currentNicheData}
               scheduledPosts={scheduledPosts}
               onAddPost={handleSchedulePost}
-              onNavigateToFactory={() => setCurrentView('factory')}
+              onNavigateToFactory={() => handleNavigateView('factory')}
             />
           )}
 
@@ -253,5 +326,13 @@ export default function App() {
         onAddCustomNiche={handleAddCustomNiche}
       />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <FirebaseProvider>
+      <TikvoDashboard />
+    </FirebaseProvider>
   );
 }

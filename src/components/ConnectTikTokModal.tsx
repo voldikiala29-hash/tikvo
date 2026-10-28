@@ -98,7 +98,7 @@ export const ConnectTikTokModal: React.FC<ConnectTikTokModalProps> = ({
             <span className="text-gray-400">Statut de la connexion :</span>
             {isConnected ? (
               <span className="flex items-center gap-1.5 font-bold text-[#00FFC6]">
-                <CheckCircle2 size={14} /> Connecté (@voldi_creator_pro)
+                <CheckCircle2 size={14} /> Connecté (@tikvo_creator_pro)
               </span>
             ) : (
               <span className="flex items-center gap-1.5 font-bold text-[#FF2E93]">
@@ -143,7 +143,7 @@ export const ConnectTikTokModal: React.FC<ConnectTikTokModalProps> = ({
                   />
                   <div>
                     <div className="flex items-center gap-1.5">
-                      <span className="font-bold text-white text-sm">@voldi_creator_pro</span>
+                      <span className="font-bold text-white text-sm">@tikvo_creator_pro</span>
                       <ShieldCheck size={14} className="text-[#00FFC6]" />
                     </div>
                     <p className="text-xs text-gray-400">TikTok Business Creator Verified</p>

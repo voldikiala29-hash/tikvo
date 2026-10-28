@@ -95,8 +95,8 @@ export const INITIAL_NICHES: Record<string, NicheData> = {
       { id: 'ma-2', brand: 'NA-KD Fashion', offer: 'Code promo créateur 20% + 15% revshare', payout: '15% net', conversionRate: '4.2%', status: 'Actif', link: 'https://creators.tiktok.com/nakd' },
     ],
     accounts: [
-      { id: 'acc-m1', handle: '@voldi_fashion_pro', displayName: 'Voldi Style Studio', avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150', nicheId: 'mode', followers: 118400, totalLikes: '3.2M', avgViews: '85K', engagementRate: '8.4%', apiConnected: true, autoPostEnabled: true, shadowbanRisk: 'Aucun', creatorRewardsEligible: true },
-      { id: 'acc-m2', handle: '@capsule_voldi', displayName: 'Capsule Wardrobe Daily', avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', nicheId: 'mode', followers: 24100, totalLikes: '610K', avgViews: '32K', engagementRate: '9.1%', apiConnected: true, autoPostEnabled: false, shadowbanRisk: 'Aucun', creatorRewardsEligible: true },
+      { id: 'acc-m1', handle: '@tikvo_fashion_pro', displayName: 'tikvo style studio', avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150', nicheId: 'mode', followers: 118400, totalLikes: '3.2M', avgViews: '85K', engagementRate: '8.4%', apiConnected: true, autoPostEnabled: true, shadowbanRisk: 'Aucun', creatorRewardsEligible: true },
+      { id: 'acc-m2', handle: '@capsule_tikvo', displayName: 'capsule wardrobe daily', avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', nicheId: 'mode', followers: 24100, totalLikes: '610K', avgViews: '32K', engagementRate: '9.1%', apiConnected: true, autoPostEnabled: false, shadowbanRisk: 'Aucun', creatorRewardsEligible: true },
     ],
     targetAudience: {
       ageRange: '18 - 34 ans',

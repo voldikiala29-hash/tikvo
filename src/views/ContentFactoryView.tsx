@@ -18,6 +18,15 @@ import {
   ChevronDown,
   RefreshCw,
   Zap,
+  Video,
+  Download,
+  Film,
+  Layers,
+  Volume2,
+  Mic,
+  Eye,
+  CheckCircle2,
+  X,
 } from 'lucide-react';
 import {
   NicheData,
@@ -28,6 +37,11 @@ import {
   ScheduledPost,
 } from '../types/tiktok';
 import { tikTokApiService } from '../services/tiktokApiService';
+import { RemotionViralPlayer } from '../video-engine/RemotionViralPlayer';
+import { ViralTemplateProps } from '../video-engine/types';
+import { videoEngineService } from '../video-engine/engineService';
+import { TIKTOK_FREE_VOICES } from '../video-engine/edgeTtsService';
+import { fetchPexelsClips } from '../video-engine/pexelsService';
 
 interface ContentFactoryViewProps {
   niche: NicheData;
@@ -54,6 +68,9 @@ export const ContentFactoryView: React.FC<ContentFactoryViewProps> = ({
     preloadedItem?.hookText || niche.hooks[0]?.text || ''
   );
 
+  // Voice selection (edge-tts)
+  const [selectedVoice, setSelectedVoice] = useState<string>(TIKTOK_FREE_VOICES[0].id);
+
   // Settings
   const [duration, setDuration] = useState<'15s' | '30s' | '60s'>('30s');
   const [tone, setTone] = useState<'Punchy' | 'Éducatif' | 'Mystérieux' | 'Storytelling'>('Punchy');
@@ -63,12 +80,26 @@ export const ContentFactoryView: React.FC<ContentFactoryViewProps> = ({
   const [scheduledSuccess, setScheduledSuccess] = useState<boolean>(false);
   const [directPostSuccess, setDirectPostSuccess] = useState<string | null>(null);
 
-  // Phone preview states
+  // View Mode in Phone Frame: 'remotion' or 'tiktok'
+  const [previewMode, setPreviewMode] = useState<'remotion' | 'tiktok'>('remotion');
+
+  // Phone preview states for TikTok mode
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [likesCount, setLikesCount] = useState<number>(14200);
   const [isLiked, setIsLiked] = useState<boolean>(false);
   const [isBookmarked, setIsBookmarked] = useState<boolean>(false);
+
+  // Remotion Dynamic Props State
+  const [remotionProps, setRemotionProps] = useState<ViralTemplateProps | null>(null);
+  const [isLoadingProps, setIsLoadingProps] = useState<boolean>(false);
+
+  // Video Engine Generation Modal State
+  const [isGeneratingVideo, setIsGeneratingVideo] = useState<boolean>(false);
+  const [generationStep, setGenerationStep] = useState<string>('');
+  const [generationPercent, setGenerationPercent] = useState<number>(0);
+  const [generatedVideoResult, setGeneratedVideoResult] = useState<any>(null);
+  const [showVideoModal, setShowVideoModal] = useState<boolean>(false);
 
   // When niche changes, update template and hook defaults!
   useEffect(() => {
@@ -88,7 +119,7 @@ export const ContentFactoryView: React.FC<ContentFactoryViewProps> = ({
   const activeSound =
     preloadedItem?.sound || niche.sounds[0] || {
       title: 'Trending Viral Audio',
-      artist: 'Tikokvoldi Sounds',
+      artist: 'tikvo Sounds',
     };
 
   // Generated Script Structure
@@ -142,6 +173,32 @@ export const ContentFactoryView: React.FC<ContentFactoryViewProps> = ({
       soundFx: 'Cash Register SFX',
     },
   ]);
+
+  // Load Remotion props whenever active hook, niche, or script changes
+  useEffect(() => {
+    let isMounted = true;
+    setIsLoadingProps(true);
+
+    const fullScriptText = sections.map((s) => s.speech).join(' ');
+    const keywords = [niche.id, niche.name, currentTemplate?.title || ''];
+
+    videoEngineService
+      .prepareRemotionProps(niche.id, niche.name, activeHook, fullScriptText, keywords)
+      .then((res) => {
+        if (isMounted) {
+          setRemotionProps(res.props);
+          setIsLoadingProps(false);
+        }
+      })
+      .catch((err) => {
+        console.error('Error preparing Remotion props:', err);
+        if (isMounted) setIsLoadingProps(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [niche.id, activeHook, scriptTitle, sections]);
 
   // Sync script when activeHook or template changes
   const handleRegenerateScript = () => {
@@ -197,16 +254,50 @@ export const ContentFactoryView: React.FC<ContentFactoryViewProps> = ({
     }, 400);
   };
 
-  // Video preview subtitle loop simulation
+  // Run the full free video engine (Pexels + edge-tts + Remotion 1080x1920)
+  const handleLaunchFreeVideoEngine = async (autoPost: boolean = false) => {
+    setIsGeneratingVideo(true);
+    setShowVideoModal(true);
+    setGenerationPercent(5);
+    setGenerationStep('Démarrage du Moteur Vidéo Gratuit tikvo...');
+
+    const fullScript = sections.map((s) => s.speech).join(' ');
+    const keywords = [niche.id, niche.name, 'aesthetic', 'vertical'];
+
+    try {
+      const res = await videoEngineService.generateVideo(
+        {
+          niche: niche.id,
+          script: fullScript,
+          hook: activeHook,
+          keywords: keywords,
+          autoPostToTikTok: autoPost,
+        },
+        (step, pct) => {
+          setGenerationStep(step);
+          setGenerationPercent(pct);
+        }
+      );
+
+      setGeneratedVideoResult(res);
+      setIsGeneratingVideo(false);
+    } catch (err: any) {
+      console.error(err);
+      setGenerationStep('Erreur de rendu vidéo : ' + err.message);
+      setIsGeneratingVideo(false);
+    }
+  };
+
+  // Video preview subtitle loop simulation for TikTok mode
   useEffect(() => {
     let interval: any;
-    if (isPlaying) {
+    if (isPlaying && previewMode === 'tiktok') {
       interval = setInterval(() => {
         setCurrentTime((prev) => (prev >= 30 ? 0 : prev + 1));
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [isPlaying]);
+  }, [isPlaying, previewMode]);
 
   const activeSubtitle =
     currentTime < 3
@@ -231,7 +322,7 @@ export const ContentFactoryView: React.FC<ContentFactoryViewProps> = ({
     const newPost: ScheduledPost = {
       id: 'sched_' + Date.now(),
       accountId: niche.accounts[0]?.id || 'acc-1',
-      accountHandle: niche.accounts[0]?.handle || '@voldi_creator',
+      accountHandle: niche.accounts[0]?.handle || '@tikvo_creator',
       nicheId: niche.id,
       title: scriptTitle,
       hook: activeHook,
@@ -273,18 +364,28 @@ export const ContentFactoryView: React.FC<ContentFactoryViewProps> = ({
       <div className="p-6 rounded-2xl bg-[#12121A]/90 border border-white/5 backdrop-blur-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-black text-white">Content Factory IA : {niche.name}</h1>
+            <h1 className="text-xl font-black text-white lowercase">tikvo content factory</h1>
             <span className="text-xl">{niche.emoji}</span>
             <span className="px-2 py-0.5 rounded-full bg-[#00FFC6]/20 text-[#00FFC6] text-[10px] font-bold border border-[#00FFC6]/30">
-              Générateur de Script + Aperçu 9:16
+              Remotion + edge-tts + Pexels
             </span>
           </div>
           <p className="text-xs text-gray-400 mt-1">
-            Chaque paramètre et hook est calibré pour la niche sélectionnée avec synchronisation des sous-titres et preview TikTok en direct.
+            Génération complète de vidéos 9:16 avec zoom Ken Burns, Hook 0-3s agrandi, sous-titres karaoké cyan et musique duckée. 100% gratuit.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Action Buttons Header */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Prominent FREE VIDEO ENGINE CTA BUTTON */}
+          <button
+            onClick={() => handleLaunchFreeVideoEngine(false)}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#00FFC6] via-[#7C3AED] to-[#FF2E93] text-black font-black text-xs transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-[#00FFC6]/25"
+          >
+            <Video size={16} className="text-black" />
+            <span className="uppercase tracking-wider font-extrabold">Générer Vidéo Gratuite</span>
+          </button>
+
           <button
             onClick={handleCopyScript}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-gray-200 transition-all"
@@ -292,39 +393,39 @@ export const ContentFactoryView: React.FC<ContentFactoryViewProps> = ({
             {copiedScript ? (
               <>
                 <Check size={14} className="text-[#00FFC6]" />
-                <span className="text-[#00FFC6]">Script Copié !</span>
+                <span className="text-[#00FFC6]">Copié !</span>
               </>
             ) : (
               <>
                 <Copy size={14} />
-                <span>Copier le Script</span>
+                <span>Copier Script</span>
               </>
             )}
           </button>
 
           <button
             onClick={handleSchedulePost}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-[#7C3AED] to-[#FF2E93] hover:opacity-90 text-white text-xs font-bold transition-all shadow-md shadow-[#7C3AED]/20"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#1A1A27] hover:bg-[#252538] border border-white/10 text-white text-xs font-bold transition-all"
           >
             {scheduledSuccess ? (
               <>
-                <Check size={14} className="text-white" />
-                <span>Planifié au Calendrier !</span>
+                <Check size={14} className="text-[#00FFC6]" />
+                <span className="text-[#00FFC6]">Planifié !</span>
               </>
             ) : (
               <>
                 <Calendar size={14} />
-                <span>Programmer au Calendrier</span>
+                <span>Programmer</span>
               </>
             )}
           </button>
 
           <button
             onClick={handleDirectPublish}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#00FFC6] hover:bg-[#00FFC6]/90 text-black text-xs font-extrabold transition-all shadow-lg shadow-[#00FFC6]/20"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#00FFC6] hover:bg-[#00FFC6]/90 text-black text-xs font-extrabold transition-all shadow-md shadow-[#00FFC6]/20"
           >
             <Send size={14} />
-            <span>Publier Direct (TikTok API)</span>
+            <span>Post TikTok API</span>
           </button>
         </div>
       </div>
@@ -348,7 +449,7 @@ export const ContentFactoryView: React.FC<ContentFactoryViewProps> = ({
           <div className="p-5 rounded-2xl bg-[#12121A]/90 border border-white/5 space-y-3">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                <span>1. Template Spécifique : Niche {niche.name}</span>
+                <span>1. Template de Niche : {niche.name}</span>
                 <span className="text-[10px] text-[#00FFC6]">({niche.templates.length} disponibles)</span>
               </label>
             </div>
@@ -389,7 +490,7 @@ export const ContentFactoryView: React.FC<ContentFactoryViewProps> = ({
               <label className="text-xs font-bold text-white uppercase tracking-wider">
                 2. Hooks Psychologiques Cliquables (0-3s)
               </label>
-              <span className="text-[10px] text-gray-400">Clique pour injecter dans le script</span>
+              <span className="text-[10px] text-[#00FFC6] font-mono">Zoom animé scale 0.8 → 1.1</span>
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -431,12 +532,50 @@ export const ContentFactoryView: React.FC<ContentFactoryViewProps> = ({
             </div>
           </div>
 
-          {/* Step 3: Parameters (Duration, Tone, CTA) */}
-          <div className="p-5 rounded-2xl bg-[#12121A]/90 border border-white/5">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Step 3: Edge-TTS Voice & Parameters */}
+          <div className="p-5 rounded-2xl bg-[#12121A]/90 border border-white/5 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Free edge-tts TikTok Voice Selector */}
+              <div>
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1 flex items-center gap-1.5">
+                  <Mic size={12} className="text-[#00FFC6]" />
+                  <span>Voix TikTok Gratuite (edge-tts)</span>
+                </label>
+                <select
+                  value={selectedVoice}
+                  onChange={(e) => setSelectedVoice(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-[#08080D] border border-white/10 text-xs text-white focus:outline-none focus:border-[#00FFC6]"
+                >
+                  {TIKTOK_FREE_VOICES.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* CTA Goal */}
               <div>
                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
-                  Durée
+                  Objectif CTA Monétisé
+                </label>
+                <select
+                  value={ctaGoal}
+                  onChange={(e: any) => setCtaGoal(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-[#08080D] border border-white/10 text-xs text-white focus:outline-none focus:border-[#00FFC6]"
+                >
+                  <option value="TikTok Shop">Panier TikTok Shop</option>
+                  <option value="Commentaires">Débat en Commentaires</option>
+                  <option value="Abonnement">Follow & Sauvegarde</option>
+                  <option value="Sauvegarde">Lien Bio / Lead Magnet</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <div>
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                  Durée Vidéo
                 </label>
                 <div className="flex rounded-xl bg-[#08080D] p-1 border border-white/5 text-xs">
                   {(['15s', '30s', '60s'] as const).map((d) => (
@@ -455,7 +594,7 @@ export const ContentFactoryView: React.FC<ContentFactoryViewProps> = ({
 
               <div>
                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
-                  Tonalité
+                  Tonalité du Script
                 </label>
                 <select
                   value={tone}
@@ -468,27 +607,11 @@ export const ContentFactoryView: React.FC<ContentFactoryViewProps> = ({
                   <option value="Storytelling">Storytelling Intime</option>
                 </select>
               </div>
-
-              <div>
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
-                  Objectif CTA
-                </label>
-                <select
-                  value={ctaGoal}
-                  onChange={(e: any) => setCtaGoal(e.target.value)}
-                  className="w-full px-3 py-1.5 rounded-xl bg-[#08080D] border border-white/10 text-xs text-white focus:outline-none focus:border-[#00FFC6]"
-                >
-                  <option value="TikTok Shop">Panier TikTok Shop</option>
-                  <option value="Commentaires">Débat en Commentaires</option>
-                  <option value="Abonnement">Follow & Sauvegarde</option>
-                  <option value="Sauvegarde">Lien Bio / Lead Magnet</option>
-                </select>
-              </div>
             </div>
 
-            <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between">
+            <div className="pt-3 border-t border-white/5 flex items-center justify-between">
               <span className="text-xs text-gray-400">
-                Son assigné : <strong className="text-white">{activeSound.title}</strong>
+                Audio assigné : <strong className="text-white">{activeSound.title}</strong>
               </span>
               <button
                 onClick={handleRegenerateScript}
@@ -496,7 +619,7 @@ export const ContentFactoryView: React.FC<ContentFactoryViewProps> = ({
                 className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-[#00FFC6] to-[#7C3AED] text-black font-extrabold text-xs flex items-center gap-1.5 hover:opacity-95 transition-all shadow-md shadow-[#00FFC6]/20"
               >
                 <RefreshCw size={13} className={isGenerating ? 'animate-spin' : ''} />
-                <span>Générer Script IA</span>
+                <span>Régénérer Script</span>
               </button>
             </div>
           </div>
@@ -551,187 +674,339 @@ export const ContentFactoryView: React.FC<ContentFactoryViewProps> = ({
           </div>
         </div>
 
-        {/* Right Side: High-Fidelity 9:16 Smartphone Simulator (5 cols) */}
+        {/* Right Side: Dual-Mode Smartphone 9:16 Preview (5 cols) */}
         <div className="lg:col-span-5 flex flex-col items-center justify-start sticky top-20">
-          <div className="mb-2 flex items-center gap-2">
-            <span className="text-xs font-bold text-gray-300">Aperçu Réaliste TikTok 9:16</span>
-            <span className="w-2 h-2 rounded-full bg-[#00FFC6] animate-pulse"></span>
+          {/* Mode Switcher Tabs */}
+          <div className="mb-3 flex items-center gap-1.5 bg-[#12121A] p-1 rounded-2xl border border-white/10 shadow-lg">
+            <button
+              onClick={() => setPreviewMode('remotion')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                previewMode === 'remotion'
+                  ? 'bg-gradient-to-r from-[#00FFC6] to-[#00B8D9] text-black shadow-md'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <Film size={13} />
+              <span>Remotion 9:16 (Ken Burns)</span>
+            </button>
+            <button
+              onClick={() => setPreviewMode('tiktok')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                previewMode === 'tiktok'
+                  ? 'bg-[#FF2E93] text-white shadow-md'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <Eye size={13} />
+              <span>Simulateur TikTok</span>
+            </button>
           </div>
 
           {/* Smartphone Mockup Frame */}
-          <div className="w-[320px] h-[640px] rounded-[42px] bg-black border-[7px] border-[#222230] shadow-2xl shadow-[#00FFC6]/10 relative overflow-hidden flex flex-col select-none">
+          <div className="w-[320px] h-[640px] rounded-[42px] bg-black border-[7px] border-[#222230] shadow-2xl shadow-[#00FFC6]/15 relative overflow-hidden flex flex-col select-none">
             {/* Phone Notch & Speaker */}
             <div className="absolute top-2 left-1/2 -translate-x-1/2 w-32 h-4 bg-[#12121A] rounded-full z-40 flex items-center justify-center">
               <div className="w-10 h-1 bg-white/20 rounded-full"></div>
             </div>
 
-            {/* Simulated TikTok Video Background */}
-            <div className="absolute inset-0 bg-gradient-to-b from-purple-900/60 via-slate-900 to-black z-0 flex items-center justify-center overflow-hidden">
-              {/* Dynamic pulsing background lighting */}
-              <div
-                className={`absolute w-72 h-72 rounded-full bg-gradient-to-tr from-[#FF2E93]/40 to-[#00FFC6]/40 blur-3xl transition-transform duration-1000 ${
-                  isPlaying ? 'scale-125 animate-pulse' : 'scale-95'
-                }`}
-              />
+            {/* TAB 1: REMOTION 9:16 VIDEO ENGINE PLAYER */}
+            {previewMode === 'remotion' && remotionProps ? (
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#08080D]">
+                <RemotionViralPlayer templateProps={remotionProps} autoPlay={true} loop={true} />
+              </div>
+            ) : previewMode === 'remotion' && isLoadingProps ? (
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#08080D] text-center p-4">
+                <RefreshCw size={28} className="text-[#00FFC6] animate-spin mb-2" />
+                <p className="text-xs text-white font-bold">Chargement de la composition Remotion...</p>
+                <p className="text-[10px] text-gray-400 mt-1">Clips Pexels 4K + Timings Karaoké</p>
+              </div>
+            ) : null}
 
-              {/* Central Video Play/Pause Overlay Button */}
-              <button
-                onClick={() => setIsPlaying(!isPlaying)}
-                className="w-16 h-16 rounded-full bg-black/40 backdrop-blur-md border border-white/20 flex items-center justify-center text-white z-20 hover:scale-105 transition-all"
-              >
-                {isPlaying ? <Pause size={24} /> : <Play size={24} fill="white" className="ml-1" />}
-              </button>
+            {/* TAB 2: TIKTOK LIVE OVERLAY MOCKUP */}
+            {previewMode === 'tiktok' && (
+              <>
+                {/* Simulated TikTok Video Background */}
+                <div className="absolute inset-0 bg-gradient-to-b from-purple-900/60 via-slate-900 to-black z-0 flex items-center justify-center overflow-hidden">
+                  <div
+                    className={`absolute w-72 h-72 rounded-full bg-gradient-to-tr from-[#FF2E93]/40 to-[#00FFC6]/40 blur-3xl transition-transform duration-1000 ${
+                      isPlaying ? 'scale-125 animate-pulse' : 'scale-95'
+                    }`}
+                  />
 
-              {/* Animated Karaoke Subtitle Badge at video center */}
-              <div className="absolute top-1/2 -translate-y-12 left-4 right-4 z-20 text-center px-2">
-                <span className="inline-block px-3 py-1.5 rounded-xl bg-black/75 backdrop-blur-md border border-white/20 text-xs font-black text-white shadow-2xl tracking-tight leading-snug">
-                  {activeSubtitle}
-                </span>
-                <div className="mt-1">
-                  <span className="px-2 py-0.5 rounded bg-[#00FFC6] text-black font-extrabold text-[9px]">
-                    {currentTime}s / 30s
-                  </span>
+                  {/* Central Play/Pause Button */}
+                  <button
+                    onClick={() => setIsPlaying(!isPlaying)}
+                    className="w-16 h-16 rounded-full bg-black/40 backdrop-blur-md border border-white/20 flex items-center justify-center text-white z-20 hover:scale-105 transition-all"
+                  >
+                    {isPlaying ? <Pause size={24} /> : <Play size={24} fill="white" className="ml-1" />}
+                  </button>
+
+                  {/* Karaoke Subtitle Badge at video center */}
+                  <div className="absolute top-1/2 -translate-y-12 left-4 right-4 z-20 text-center px-2">
+                    <span className="inline-block px-3 py-1.5 rounded-xl bg-black/75 backdrop-blur-md border border-white/20 text-xs font-black text-white shadow-2xl tracking-tight leading-snug">
+                      {activeSubtitle}
+                    </span>
+                    <div className="mt-1">
+                      <span className="px-2 py-0.5 rounded bg-[#00FFC6] text-black font-extrabold text-[9px]">
+                        {currentTime}s / 30s
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
 
-            {/* Top Bar inside Phone: Following / For You Tabs */}
-            <div className="relative z-30 pt-7 px-4 flex items-center justify-between text-xs font-bold text-white/80">
-              <div className="w-6"></div>
-              <div className="flex items-center gap-4 text-[13px]">
-                <span className="text-white/50">Abonnements</span>
-                <div className="relative">
-                  <span className="text-white font-extrabold">Pour toi</span>
-                  <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-4 h-0.5 bg-white rounded-full"></div>
+                {/* Top Bar inside Phone */}
+                <div className="relative z-30 pt-7 px-4 flex items-center justify-between text-xs font-bold text-white/80">
+                  <div className="w-6"></div>
+                  <div className="flex items-center gap-4 text-[13px]">
+                    <span className="text-white/50">Abonnements</span>
+                    <div className="relative">
+                      <span className="text-white font-extrabold">Pour toi</span>
+                      <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-4 h-0.5 bg-white rounded-full"></div>
+                    </div>
+                  </div>
+                  <div className="w-6 text-right">🔍</div>
                 </div>
-              </div>
-              <div className="w-6 text-right">🔍</div>
-            </div>
 
-            {/* Right Action Bar (Avatar, Likes, Comments, Bookmark, Share, Vinyl) */}
-            <div className="absolute right-3 bottom-24 z-30 flex flex-col items-center gap-4 text-white">
-              {/* Creator Avatar with follow red badge */}
-              <div className="relative">
-                <img
-                  src={niche.accounts[0]?.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'}
-                  alt="Creator"
-                  className="w-10 h-10 rounded-full border-2 border-white object-cover"
-                />
-                <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-[#FF2E93] text-white flex items-center justify-center text-[10px] font-bold">
-                  +
-                </span>
-              </div>
+                {/* Right Action Bar */}
+                <div className="absolute right-3 bottom-24 z-30 flex flex-col items-center gap-4 text-white">
+                  <div className="relative">
+                    <img
+                      src={niche.accounts[0]?.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'}
+                      alt="Creator"
+                      className="w-10 h-10 rounded-full border-2 border-white object-cover"
+                    />
+                    <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-[#FF2E93] text-white flex items-center justify-center text-[10px] font-bold">
+                      +
+                    </span>
+                  </div>
 
-              {/* Heart Likes */}
-              <button
-                onClick={() => {
-                  setIsLiked(!isLiked);
-                  setLikesCount((prev) => (isLiked ? prev - 1 : prev + 1));
-                }}
-                className="flex flex-col items-center gap-0.5 group"
-              >
-                <div className="w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center transition-transform active:scale-125">
-                  <Heart
-                    size={22}
-                    className={isLiked ? 'text-[#FF2E93] fill-[#FF2E93]' : 'text-white'}
+                  <button
+                    onClick={() => {
+                      setIsLiked(!isLiked);
+                      setLikesCount((prev) => (isLiked ? prev - 1 : prev + 1));
+                    }}
+                    className="flex flex-col items-center gap-0.5 group"
+                  >
+                    <div className="w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center transition-transform active:scale-125">
+                      <Heart
+                        size={22}
+                        className={isLiked ? 'text-[#FF2E93] fill-[#FF2E93]' : 'text-white'}
+                      />
+                    </div>
+                    <span className="text-[10px] font-bold drop-shadow">
+                      {(likesCount / 1000).toFixed(1)}k
+                    </span>
+                  </button>
+
+                  <div className="flex flex-col items-center gap-0.5">
+                    <div className="w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center">
+                      <MessageCircle size={21} className="text-white" />
+                    </div>
+                    <span className="text-[10px] font-bold drop-shadow">482</span>
+                  </div>
+
+                  <button
+                    onClick={() => setIsBookmarked(!isBookmarked)}
+                    className="flex flex-col items-center gap-0.5"
+                  >
+                    <div className="w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center">
+                      <Bookmark
+                        size={21}
+                        className={isBookmarked ? 'text-amber-400 fill-amber-400' : 'text-white'}
+                      />
+                    </div>
+                    <span className="text-[10px] font-bold drop-shadow">1.8k</span>
+                  </button>
+
+                  <div className="flex flex-col items-center gap-0.5">
+                    <div className="w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center">
+                      <Share2 size={21} className="text-white" />
+                    </div>
+                    <span className="text-[10px] font-bold drop-shadow">940</span>
+                  </div>
+
+                  <div
+                    className={`w-9 h-9 rounded-full bg-zinc-900 border-2 border-zinc-700 flex items-center justify-center ${
+                      isPlaying ? 'animate-spin' : ''
+                    }`}
+                    style={{ animationDuration: '4s' }}
+                  >
+                    <div className="w-4 h-4 rounded-full bg-gradient-to-tr from-[#00FFC6] to-[#FF2E93]"></div>
+                  </div>
+                </div>
+
+                {/* Bottom Overlay */}
+                <div className="absolute left-3 right-16 bottom-5 z-30 space-y-2 text-white">
+                  <div className="flex items-center gap-2">
+                    <span className="font-extrabold text-xs drop-shadow">
+                      {niche.accounts[0]?.handle || '@tikvo_creator'}
+                    </span>
+                    <span className="px-1 py-0.2 rounded bg-white/20 text-[9px] font-bold">
+                      tikvo
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] leading-tight drop-shadow font-medium line-clamp-2">
+                    {scriptTitle} ⚡ {activeHook}
+                  </p>
+
+                  <div className="flex flex-wrap gap-1 text-[10px] text-[#00FFC6] font-bold drop-shadow">
+                    {niche.hashtags.slice(0, 3).map((h) => (
+                      <span key={h.id}>{h.tag}</span>
+                    ))}
+                  </div>
+
+                  {ctaGoal === 'TikTok Shop' && (
+                    <div className="p-1.5 px-2 rounded-lg bg-amber-500/90 text-black flex items-center gap-1.5 text-[10px] font-black shadow-lg">
+                      <ShoppingBag size={12} />
+                      <span className="truncate">{niche.products[0]?.name || 'Produit Tendance'}</span>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-1.5 text-[10px] text-white/90 drop-shadow">
+                    <Music size={11} className="text-[#00FFC6]" />
+                    <span className="truncate max-w-[160px] font-medium">
+                      {activeSound.title} - {activeSound.artist}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Video Progress Bar */}
+                <div className="absolute bottom-1 left-0 right-0 h-1 bg-white/20 z-40">
+                  <div
+                    style={{ width: `${(currentTime / 30) * 100}%` }}
+                    className="h-full bg-white transition-all duration-300"
                   />
                 </div>
-                <span className="text-[10px] font-bold drop-shadow">
-                  {(likesCount / 1000).toFixed(1)}k
-                </span>
-              </button>
-
-              {/* Comments */}
-              <div className="flex flex-col items-center gap-0.5">
-                <div className="w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center">
-                  <MessageCircle size={21} className="text-white" />
-                </div>
-                <span className="text-[10px] font-bold drop-shadow">482</span>
-              </div>
-
-              {/* Bookmarks */}
-              <button
-                onClick={() => setIsBookmarked(!isBookmarked)}
-                className="flex flex-col items-center gap-0.5"
-              >
-                <div className="w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center">
-                  <Bookmark
-                    size={21}
-                    className={isBookmarked ? 'text-amber-400 fill-amber-400' : 'text-white'}
-                  />
-                </div>
-                <span className="text-[10px] font-bold drop-shadow">1.8k</span>
-              </button>
-
-              {/* Share */}
-              <div className="flex flex-col items-center gap-0.5">
-                <div className="w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center">
-                  <Share2 size={21} className="text-white" />
-                </div>
-                <span className="text-[10px] font-bold drop-shadow">940</span>
-              </div>
-
-              {/* Spinning Vinyl Disc */}
-              <div
-                className={`w-9 h-9 rounded-full bg-zinc-900 border-2 border-zinc-700 flex items-center justify-center ${
-                  isPlaying ? 'animate-spin' : ''
-                }`}
-                style={{ animationDuration: '4s' }}
-              >
-                <div className="w-4 h-4 rounded-full bg-gradient-to-tr from-[#00FFC6] to-[#FF2E93]"></div>
-              </div>
-            </div>
-
-            {/* Bottom Overlay: Account, Caption, Product Pill, Sound Bar */}
-            <div className="absolute left-3 right-16 bottom-5 z-30 space-y-2 text-white">
-              {/* Creator Handle */}
-              <div className="flex items-center gap-2">
-                <span className="font-extrabold text-xs drop-shadow">
-                  {niche.accounts[0]?.handle || '@voldi_creator'}
-                </span>
-                <span className="px-1 py-0.2 rounded bg-white/20 text-[9px] font-bold">
-                  Créateur
-                </span>
-              </div>
-
-              {/* Caption & Hashtags */}
-              <p className="text-[11px] leading-tight drop-shadow font-medium line-clamp-2">
-                {scriptTitle} ⚡ {activeHook}
-              </p>
-
-              <div className="flex flex-wrap gap-1 text-[10px] text-[#00FFC6] font-bold drop-shadow">
-                {niche.hashtags.slice(0, 3).map((h) => (
-                  <span key={h.id}>{h.tag}</span>
-                ))}
-              </div>
-
-              {/* TikTok Shop Yellow/Orange Product Tag */}
-              {ctaGoal === 'TikTok Shop' && (
-                <div className="p-1.5 px-2 rounded-lg bg-amber-500/90 text-black flex items-center gap-1.5 text-[10px] font-black shadow-lg">
-                  <ShoppingBag size={12} />
-                  <span className="truncate">{niche.products[0]?.name || 'Produit Tendance'}</span>
-                </div>
-              )}
-
-              {/* Audio Sound Title Ticker */}
-              <div className="flex items-center gap-1.5 text-[10px] text-white/90 drop-shadow">
-                <Music size={11} className="text-[#00FFC6]" />
-                <span className="truncate max-w-[160px] font-medium">
-                  {activeSound.title} - {activeSound.artist}
-                </span>
-              </div>
-            </div>
-
-            {/* Video Progress Bar at bottom */}
-            <div className="absolute bottom-1 left-0 right-0 h-1 bg-white/20 z-40">
-              <div
-                style={{ width: `${(currentTime / 30) * 100}%` }}
-                className="h-full bg-white transition-all duration-300"
-              />
-            </div>
+              </>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Free Video Engine Live Progress / Export Modal */}
+      {showVideoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
+          <div className="w-full max-w-lg bg-[#12121A] border border-white/10 rounded-2xl shadow-2xl p-6 space-y-5">
+            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#00FFC6] to-[#7C3AED] p-0.5">
+                  <div className="w-full h-full bg-[#08080D] rounded-[10px] flex items-center justify-center text-white">
+                    <Film size={20} className="text-[#00FFC6]" />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="font-black text-white text-base lowercase">
+                    tikvo video-engine : 1080x1920
+                  </h3>
+                  <p className="text-xs text-gray-400">
+                    Remotion 9:16 + edge-tts + Pexels 4K
+                  </p>
+                </div>
+              </div>
+
+              {!isGeneratingVideo && (
+                <button
+                  onClick={() => setShowVideoModal(false)}
+                  className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white"
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+
+            {/* Progress Bar & Status */}
+            <div className="space-y-3">
+              <div className="flex justify-between text-xs">
+                <span className="font-bold text-white">{generationStep}</span>
+                <span className="font-mono text-[#00FFC6] font-extrabold">{generationPercent}%</span>
+              </div>
+
+              <div className="w-full h-2.5 rounded-full bg-[#08080D] overflow-hidden border border-white/5">
+                <div
+                  style={{ width: `${generationPercent}%` }}
+                  className="h-full bg-gradient-to-r from-[#00FFC6] via-[#7C3AED] to-[#FF2E93] transition-all duration-300"
+                />
+              </div>
+
+              {/* 5-Step Checklist */}
+              <div className="space-y-2 text-xs text-gray-300 pt-2">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2
+                    size={14}
+                    className={generationPercent >= 20 ? 'text-[#00FFC6]' : 'text-gray-600'}
+                  />
+                  <span>1. Récupération des 3 clips Pexels selon les keywords de {niche.name}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2
+                    size={14}
+                    className={generationPercent >= 45 ? 'text-[#00FFC6]' : 'text-gray-600'}
+                  />
+                  <span>2. Synthèse vocale edge-tts TikTok French + timestamps karaoké</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2
+                    size={14}
+                    className={generationPercent >= 75 ? 'text-[#00FFC6]' : 'text-gray-600'}
+                  />
+                  <span>3. Montage Remotion : Zoom Ken Burns + Hook 0-3s animé + Barre rose</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2
+                    size={14}
+                    className={generationPercent >= 90 ? 'text-[#00FFC6]' : 'text-gray-600'}
+                  />
+                  <span>4. Rendu MP4 1080x1920 à 30fps haute fidélité</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2
+                    size={14}
+                    className={generationPercent === 100 ? 'text-[#00FFC6]' : 'text-gray-600'}
+                  />
+                  <span>5. Prêt pour publication automatique sur TikTok API</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Finished state actions */}
+            {!isGeneratingVideo && generatedVideoResult && (
+              <div className="pt-3 border-t border-white/10 space-y-3">
+                <div className="p-3 rounded-xl bg-[#08080D] border border-white/5 flex items-center justify-between text-xs">
+                  <span className="text-gray-400">ID de rendu :</span>
+                  <span className="font-mono text-[#00FFC6] font-bold">{generatedVideoResult.renderId}</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => {
+                      const link = document.createElement('a');
+                      link.href = generatedVideoResult.videoUrl;
+                      link.download = `tikvo-${niche.id}-${Date.now()}.mp4`;
+                      link.click();
+                    }}
+                    className="py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all"
+                  >
+                    <Download size={14} />
+                    <span>Télécharger MP4</span>
+                  </button>
+
+                  <button
+                    onClick={async () => {
+                      await handleDirectPublish();
+                      setShowVideoModal(false);
+                    }}
+                    className="py-2.5 rounded-xl bg-gradient-to-r from-[#00FFC6] to-[#00B8D9] text-black font-extrabold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-[#00FFC6]/20"
+                  >
+                    <Send size={14} />
+                    <span>Poster sur TikTok</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

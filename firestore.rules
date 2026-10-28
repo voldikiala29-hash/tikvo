@@ -1,0 +1,140 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Public connection test endpoint for Firestore connectivity handshake
+    match /test/connection {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Global Reusable Security Primitives
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+    }
+
+    // Validation Blueprint: User
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'createdAt', 'updatedAt']) &&
+        data.uid is string && data.uid.size() > 0 && data.uid.size() <= 128 &&
+        data.email is string && data.email.size() > 0 && data.email.size() <= 256 &&
+        data.createdAt is string && data.createdAt.size() <= 64 &&
+        (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100)) &&
+        (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 1024)) &&
+        (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 64));
+    }
+
+    // Validation Blueprint: Custom Niche
+    function isValidCustomNiche(data) {
+      return data.keys().hasAll(['id', 'userId', 'name', 'emoji', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'userId', 'name', 'emoji', 'tagline', 'description', 'targetAudience', 'firstHashtag', 'firstHook', 'createdAt']) &&
+        data.id is string && data.id.size() > 0 && data.id.size() <= 128 &&
+        data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128 &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 80 &&
+        data.emoji is string && data.emoji.size() > 0 && data.emoji.size() <= 16 &&
+        data.createdAt is string && data.createdAt.size() <= 64 &&
+        (!('tagline' in data) || (data.tagline is string && data.tagline.size() <= 250)) &&
+        (!('description' in data) || (data.description is string && data.description.size() <= 500)) &&
+        (!('targetAudience' in data) || (data.targetAudience is string && data.targetAudience.size() <= 80)) &&
+        (!('firstHashtag' in data) || (data.firstHashtag is string && data.firstHashtag.size() <= 60)) &&
+        (!('firstHook' in data) || (data.firstHook is string && data.firstHook.size() <= 250));
+    }
+
+    // Validation Blueprint: Scheduled Post
+    function isValidScheduledPost(data) {
+      return data.keys().hasAll(['id', 'userId', 'title', 'status', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'userId', 'accountId', 'accountHandle', 'nicheId', 'title', 'hook', 'caption', 'soundTitle', 'scheduledDate', 'scheduledTime', 'status', 'format', 'duration', 'thumbnailGradient', 'createdAt']) &&
+        data.id is string && data.id.size() > 0 && data.id.size() <= 128 &&
+        data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128 &&
+        data.title is string && data.title.size() > 0 && data.title.size() <= 150 &&
+        data.status in ['draft', 'queued', 'published'] &&
+        data.createdAt is string && data.createdAt.size() <= 64 &&
+        (!('accountId' in data) || (data.accountId is string && data.accountId.size() <= 128)) &&
+        (!('accountHandle' in data) || (data.accountHandle is string && data.accountHandle.size() <= 80)) &&
+        (!('nicheId' in data) || (data.nicheId is string && data.nicheId.size() <= 80)) &&
+        (!('hook' in data) || (data.hook is string && data.hook.size() <= 250)) &&
+        (!('caption' in data) || (data.caption is string && data.caption.size() <= 2200)) &&
+        (!('soundTitle' in data) || (data.soundTitle is string && data.soundTitle.size() <= 120)) &&
+        (!('scheduledDate' in data) || (data.scheduledDate is string && data.scheduledDate.size() <= 30)) &&
+        (!('scheduledTime' in data) || (data.scheduledTime is string && data.scheduledTime.size() <= 20)) &&
+        (!('format' in data) || (data.format is string && data.format.size() <= 100)) &&
+        (!('duration' in data) || (data.duration is string && data.duration.size() <= 30)) &&
+        (!('thumbnailGradient' in data) || (data.thumbnailGradient is string && data.thumbnailGradient.size() <= 100));
+    }
+
+    // Validation Blueprint: Generated Script
+    function isValidGeneratedScript(data) {
+      return data.keys().hasAll(['id', 'userId', 'title', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'userId', 'nicheId', 'title', 'hook', 'cta', 'duration', 'tone', 'scriptText', 'createdAt']) &&
+        data.id is string && data.id.size() > 0 && data.id.size() <= 128 &&
+        data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128 &&
+        data.title is string && data.title.size() > 0 && data.title.size() <= 150 &&
+        data.createdAt is string && data.createdAt.size() <= 64 &&
+        (!('nicheId' in data) || (data.nicheId is string && data.nicheId.size() <= 80)) &&
+        (!('hook' in data) || (data.hook is string && data.hook.size() <= 250)) &&
+        (!('cta' in data) || (data.cta is string && data.cta.size() <= 100)) &&
+        (!('duration' in data) || (data.duration is string && data.duration.size() <= 30)) &&
+        (!('tone' in data) || (data.tone is string && data.tone.size() <= 50)) &&
+        (!('scriptText' in data) || (data.scriptText is string && data.scriptText.size() <= 5000));
+    }
+
+    // Match Collection: Users
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false; // Blanket user listing forbidden for privacy & PII protection
+      allow create: if isOwner(userId) && isValidUser(incoming()) && incoming().uid == request.auth.uid;
+      allow update: if isOwner(userId) && isValidUser(incoming()) && incoming().uid == existing().uid && incoming().createdAt == existing().createdAt;
+      allow delete: if isOwner(userId);
+
+      // Sub-collection: Custom Niches
+      match /customNiches/{nicheId} {
+        allow get: if isOwner(userId) && isValidId(nicheId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(nicheId) && isValidCustomNiche(incoming()) && incoming().userId == request.auth.uid;
+        allow update: if isOwner(userId) && isValidId(nicheId) && isValidCustomNiche(incoming()) && incoming().userId == existing().userId && incoming().createdAt == existing().createdAt;
+        allow delete: if isOwner(userId) && isValidId(nicheId);
+      }
+
+      // Sub-collection: Scheduled Posts
+      match /scheduledPosts/{postId} {
+        allow get: if isOwner(userId) && isValidId(postId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(postId) && isValidScheduledPost(incoming()) && incoming().userId == request.auth.uid;
+        allow update: if isOwner(userId) && isValidId(postId) && isValidScheduledPost(incoming()) && incoming().userId == existing().userId && incoming().createdAt == existing().createdAt;
+        allow delete: if isOwner(userId) && isValidId(postId);
+      }
+
+      // Sub-collection: Generated Scripts
+      match /generatedScripts/{scriptId} {
+        allow get: if isOwner(userId) && isValidId(scriptId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(scriptId) && isValidGeneratedScript(incoming()) && incoming().userId == request.auth.uid;
+        allow update: if isOwner(userId) && isValidId(scriptId) && isValidGeneratedScript(incoming()) && incoming().userId == existing().userId && incoming().createdAt == existing().createdAt;
+        allow delete: if isOwner(userId) && isValidId(scriptId);
+      }
+    }
+  }
+}

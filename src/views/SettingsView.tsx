@@ -132,7 +132,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="flex items-center justify-between">
               <span className="text-gray-400">Endpoint de Notification Webhook :</span>
               <span className="font-mono text-gray-300 text-[11px]">
-                https://tikokvoldi.applet/api/tiktok/webhooks
+                https://tikvo.applet/api/tiktok/webhooks
               </span>
             </div>
             <div className="flex items-center justify-between">
