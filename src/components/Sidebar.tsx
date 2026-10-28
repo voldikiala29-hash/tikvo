@@ -14,6 +14,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { NicheData, NicheId } from '../types/tiktok';
+import { useFirebase } from '../contexts/FirebaseContext';
 
 interface SidebarProps {
   currentView: string;
@@ -36,6 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isTikTokConnected,
   onOpenConnectModal,
 }) => {
+  const { user, isDemoUser, setIsFirebaseModalOpen } = useFirebase();
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, badge: null },
     { id: 'accounts', label: 'Comptes TikTok', icon: Users, badge: 'Multi' },
@@ -230,6 +232,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
               className="text-gray-400 group-hover:text-[#00FFC6] group-hover:translate-x-0.5 transition-all"
             />
           </div>
+        </div>
+
+        {/* Firebase Cloud Sync Status Card */}
+        <div
+          onClick={() => setIsFirebaseModalOpen(true)}
+          className="mt-2 p-2.5 rounded-xl bg-[#12121A] border border-white/5 hover:border-[#00FFC6]/40 cursor-pointer transition-all flex items-center justify-between group"
+          title="Ouvrir le centre Firebase & Cloud"
+        >
+          <div className="flex items-center gap-2 truncate">
+            <span className="w-2 h-2 rounded-full bg-[#00FFC6] animate-pulse"></span>
+            <span className="text-[10px] font-bold text-gray-300 group-hover:text-white truncate">
+              {user ? (isDemoUser ? 'Testeur Firebase Actif' : 'Firebase Cloud Connecté') : 'Firebase Cloud (Voir)'}
+            </span>
+          </div>
+          <span className="text-[9px] text-[#00FFC6] font-semibold bg-[#00FFC6]/10 px-2 py-0.5 rounded-md border border-[#00FFC6]/20">
+            {user ? 'Session' : 'Connexion'}
+          </span>
         </div>
       </div>
     </aside>

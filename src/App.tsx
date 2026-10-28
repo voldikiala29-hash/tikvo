@@ -4,6 +4,7 @@ import { Topbar } from './components/Topbar';
 import { ViralIdeasModal } from './components/ViralIdeasModal';
 import { ConnectTikTokModal } from './components/ConnectTikTokModal';
 import { CustomNicheModal } from './components/CustomNicheModal';
+import { FirebaseModal } from './components/FirebaseModal';
 import { DashboardView } from './views/DashboardView';
 import { RadarViralView } from './views/RadarViralView';
 import { ContentFactoryView } from './views/ContentFactoryView';
@@ -347,6 +348,8 @@ function TikvoDashboard() {
         onClose={() => setIsCustomNicheModalOpen(false)}
         onAddCustomNiche={handleAddCustomNiche}
       />
+
+      <FirebaseModal />
     </div>
   );
 }

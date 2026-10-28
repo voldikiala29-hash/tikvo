@@ -2,57 +2,74 @@ import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as fbSignOut, User, Auth } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer, Firestore } from 'firebase/firestore';
 
-// 1. Safely retrieve Firebase configuration from firebase-applet-config.json if available
+// 1. Fallback configuration from provisioned Firebase project
+const DEFAULT_CONFIG = {
+  projectId: 'gen-lang-client-0420281505',
+  appId: '1:1079644250638:web:6cde6910262c6cb98f525f',
+  apiKey: 'AIzaSyCxSK0oTuaLlXnTgbHAFil3ttHG0As2jhg',
+  authDomain: 'gen-lang-client-0420281505.firebaseapp.com',
+  firestoreDatabaseId: 'ai-studio-tikokvoldiuniver-46f5a527-94d6-419d-abf4-7d5f6ed4a676',
+  storageBucket: 'gen-lang-client-0420281505.firebasestorage.app',
+  messagingSenderId: '1079644250638',
+};
+
+// Safely retrieve Firebase configuration from firebase-applet-config.json if available
 let rawFirebaseConfig: Record<string, any> = {};
 try {
   // Use Vite's glob eager import so that if the file is absent on GitHub, it will NOT fail build
-  const configModules = import.meta.glob<{ default: Record<string, any> }>('/firebase-applet-config.json', {
+  const configModules = import.meta.glob<{ default: Record<string, any> }>([
+    '/firebase-applet-config.json',
+    '../../firebase-applet-config.json',
+  ], {
     eager: true,
   });
-  if (configModules['/firebase-applet-config.json']?.default) {
-    rawFirebaseConfig = configModules['/firebase-applet-config.json'].default;
+  for (const key of Object.keys(configModules)) {
+    if (configModules[key]?.default) {
+      rawFirebaseConfig = configModules[key].default;
+      break;
+    }
   }
 } catch {
   rawFirebaseConfig = {};
 }
 
-// 2. Fallback to Vite environment variables (VITE_FIREBASE_*)
+// 2. Priority: Vite environment variables (VITE_FIREBASE_*) -> applet config -> DEFAULT_CONFIG
 const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : ({} as Record<string, string>);
 
-const projectId =
+export const projectId =
   (env.VITE_FIREBASE_PROJECT_ID as string) ||
   rawFirebaseConfig?.projectId ||
-  '';
+  DEFAULT_CONFIG.projectId;
 
-const appId =
+export const appId =
   (env.VITE_FIREBASE_APP_ID as string) ||
   rawFirebaseConfig?.appId ||
-  '';
+  DEFAULT_CONFIG.appId;
 
-const apiKey =
+export const apiKey =
   (env.VITE_FIREBASE_API_KEY as string) ||
   rawFirebaseConfig?.apiKey ||
-  '';
+  DEFAULT_CONFIG.apiKey;
 
-const authDomain =
+export const authDomain =
   (env.VITE_FIREBASE_AUTH_DOMAIN as string) ||
   rawFirebaseConfig?.authDomain ||
-  (projectId ? `${projectId}.firebaseapp.com` : '');
+  DEFAULT_CONFIG.authDomain;
 
-const firestoreDatabaseId =
+export const firestoreDatabaseId =
   (env.VITE_FIREBASE_DATABASE_ID as string) ||
   rawFirebaseConfig?.firestoreDatabaseId ||
-  '';
+  DEFAULT_CONFIG.firestoreDatabaseId;
 
-const storageBucket =
+export const storageBucket =
   (env.VITE_FIREBASE_STORAGE_BUCKET as string) ||
   rawFirebaseConfig?.storageBucket ||
-  (projectId ? `${projectId}.firebasestorage.app` : '');
+  DEFAULT_CONFIG.storageBucket;
 
-const messagingSenderId =
+export const messagingSenderId =
   (env.VITE_FIREBASE_MESSAGING_SENDER_ID as string) ||
   rawFirebaseConfig?.messagingSenderId ||
-  '';
+  DEFAULT_CONFIG.messagingSenderId;
 
 // Determine if valid Firebase credentials exist
 export const isFirebaseConfigured: boolean = Boolean(apiKey && projectId && apiKey.trim() !== '');
@@ -151,17 +168,24 @@ export function handleFirestoreError(
 }
 
 /**
- * Handshake check for Firestore connection
+ * Handshake check for Firestore connection with latency calculation
  */
-export async function testConnection(): Promise<boolean> {
-  if (!db) return false;
+export async function testConnection(): Promise<{ success: boolean; latencyMs?: number; message?: string }> {
+  if (!db) {
+    return { success: false, message: 'Base Firestore non initialisée.' };
+  }
+  const startTime = Date.now();
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
-    console.log('[Firebase] Connexion serveur vérifiée.');
-    return true;
-  } catch (error) {
-    console.warn('[Firebase] Mode hors-ligne ou base Firestore non accessible.');
-    return false;
+    const latency = Date.now() - startTime;
+    console.info(`[Firebase] Connexion serveur vérifiée en ${latency}ms.`);
+    return { success: true, latencyMs: latency, message: `Connecté à Firestore (${latency}ms)` };
+  } catch (error: any) {
+    console.warn('[Firebase] Erreur handshake Firestore :', error);
+    return {
+      success: false,
+      message: error?.message || 'Serveur distant inaccessible en direct.',
+    };
   }
 }
 

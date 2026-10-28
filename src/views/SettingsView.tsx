@@ -10,9 +10,12 @@ import {
   Globe,
   Radio,
   Clock,
+  Database,
+  Cloud,
 } from 'lucide-react';
 import { NicheData } from '../types/tiktok';
 import { tikTokApiService } from '../services/tiktokApiService';
+import { useFirebase } from '../contexts/FirebaseContext';
 
 interface SettingsViewProps {
   niche: NicheData;
@@ -32,6 +35,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [isTestingApi, setIsTestingApi] = useState(false);
   const [apiTestResult, setApiTestResult] = useState<string | null>(null);
+  const { user, isDemoUser, setIsFirebaseModalOpen, projectId, firestoreDatabaseId } = useFirebase();
 
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
@@ -162,6 +166,59 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               {apiTestResult}
             </div>
           )}
+        </div>
+
+        {/* Firebase Cloud Firestore Synchronization */}
+        <div className="p-6 rounded-2xl bg-[#12121A]/90 border border-white/5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+              <Database size={16} className="text-[#00FFC6]" />
+              <span>Base de données & Synchronisation Firebase Cloud</span>
+            </h3>
+
+            <button
+              type="button"
+              onClick={() => setIsFirebaseModalOpen(true)}
+              className="text-xs text-[#00FFC6] hover:underline font-bold flex items-center gap-1"
+            >
+              <span>Ouvrir le Centre Firebase</span>
+              <ExternalLink size={12} />
+            </button>
+          </div>
+
+          <div className="p-4 rounded-xl bg-[#08080D] border border-white/5 space-y-3 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-gray-400">Statut de la session utilisateur :</span>
+              <span className="text-[#00FFC6] font-bold flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#00FFC6] animate-pulse"></span>
+                {user ? (isDemoUser ? 'Connecté (Mode Créateur Test)' : `Connecté (${user.email})`) : 'Non connecté'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-400">Projet Cloud / Base Firestore :</span>
+              <span className="font-mono text-gray-300 text-[11px] truncate max-w-xs">
+                {firestoreDatabaseId}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-400">Règles de sécurité Firestore :</span>
+              <span className="text-emerald-400 font-bold flex items-center gap-1">
+                <ShieldCheck size={14} />
+                Actives & Sécurisées (Europe-West2)
+              </span>
+            </div>
+          </div>
+
+          <div className="pt-1">
+            <button
+              type="button"
+              onClick={() => setIsFirebaseModalOpen(true)}
+              className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold transition-all flex items-center gap-2"
+            >
+              <Cloud size={14} className="text-[#00FFC6]" />
+              <span>Gérer la connexion Google & voir les données cloud</span>
+            </button>
+          </div>
         </div>
 
         {/* Save button */}
