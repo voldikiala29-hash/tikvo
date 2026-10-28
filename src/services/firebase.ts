@@ -1,10 +1,42 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as fbSignOut, User } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
+import rawFirebaseConfig from '../../firebase-applet-config.json';
 
-// Initialize Firebase App
-const app = initializeApp(firebaseConfig);
+// Safe configuration using import.meta.env or fallback JSON
+const firebaseConfig = {
+  projectId:
+    (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_PROJECT_ID) ||
+    rawFirebaseConfig?.projectId ||
+    'gen-lang-client-0420281505',
+  appId:
+    (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_APP_ID) ||
+    rawFirebaseConfig?.appId ||
+    '1:1079644250638:web:6cde6910262c6cb98f525f',
+  apiKey:
+    (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_API_KEY) ||
+    rawFirebaseConfig?.apiKey ||
+    'AIzaSyCxSK0oTuaLlXnTgbHAFil3ttHG0As2jhg',
+  authDomain:
+    (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_AUTH_DOMAIN) ||
+    rawFirebaseConfig?.authDomain ||
+    'gen-lang-client-0420281505.firebaseapp.com',
+  firestoreDatabaseId:
+    (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_DATABASE_ID) ||
+    rawFirebaseConfig?.firestoreDatabaseId ||
+    'ai-studio-tikokvoldiuniver-46f5a527-94d6-419d-abf4-7d5f6ed4a676',
+  storageBucket:
+    (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_STORAGE_BUCKET) ||
+    rawFirebaseConfig?.storageBucket ||
+    'gen-lang-client-0420281505.firebasestorage.app',
+  messagingSenderId:
+    (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_MESSAGING_SENDER_ID) ||
+    rawFirebaseConfig?.messagingSenderId ||
+    '1079644250638',
+};
+
+// Initialize Firebase App safely without crashing startup
+const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
 // CRITICAL: Always pass firestoreDatabaseId as second argument
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
@@ -63,7 +95,7 @@ export function handleFirestoreError(
     operationType,
     path,
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  console.warn('Firestore Warning/Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
 }
 
@@ -72,6 +104,7 @@ export function handleFirestoreError(
  */
 export async function testConnection(): Promise<boolean> {
   try {
+    if (!db) return false;
     await getDocFromServer(doc(db, 'test', 'connection'));
     console.log('[Firebase] Connection handshake verified successfully.');
     return true;
@@ -80,12 +113,13 @@ export async function testConnection(): Promise<boolean> {
       console.warn('[Firebase] Client is offline or database is initializing.');
       return false;
     }
-    // Handshake attempt completed
+    // Handshake attempt completed or gracefully handled
     return true;
   }
 }
 
-// Run initial handshake test
-testConnection();
+// Run initial handshake test with safe catch handler
+testConnection().catch(() => {});
 
 export { signInWithPopup, fbSignOut };
+export type { User };

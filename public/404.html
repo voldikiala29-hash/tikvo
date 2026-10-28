@@ -1,31 +1,28 @@
 <!doctype html>
-<html lang="en">
+<html lang="fr">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>tikvo - universal tiktok viral manager & auto-poster</title>
-    <meta name="description" content="tikvo - SaaS dark luxe pour gérer toutes les niches TikTok, générer des vidéos virales 9:16 avec Remotion et poster automatiquement." />
-    <meta property="og:title" content="tikvo - universal tiktok viral manager & auto-poster" />
-    <meta property="og:description" content="tikvo - SaaS dark luxe pour gérer toutes les niches TikTok, générer des vidéos virales 9:16 avec Remotion et poster automatiquement." />
-    <meta property="og:type" content="website" />
-    <meta name="twitter:card" content="summary_large_image" />
+    <meta charset="utf-8" />
+    <title>tikvo - redirection...</title>
     <script type="text/javascript">
-      // Single Page Apps for GitHub Pages SPA redirection handler
-      // Keeps path and query params intact when refreshed on GitHub Pages
-      var segmentCount = 1;
+      // Single Page Apps for GitHub Pages
+      // MIT License - https://github.com/rafgraph/spa-github-pages
+      // This script takes the current url and converts the path and query
+      // into just a query string, then redirects the browser to the new url
+      // with only a query string and hash fragment, e.g.
+      // https://voldikiala29-hash.github.io/tikvo/radar becomes
+      // https://voldikiala29-hash.github.io/tikvo/?/radar
+      var pathSegmentsToKeep = 1;
+
       var l = window.location;
-      if (l.search[1] === '/' ) {
-        var decoded = l.search.slice(1).split('&').map(function(s) { 
-          return s.replace(/~and~/g, '&')
-        }).join('?');
-        window.history.replaceState(null, null,
-            l.pathname.slice(0, -1) + decoded + l.hash
-        );
-      }
+      l.replace(
+        l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+        l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?/' +
+        l.pathname.slice(1).split('/').slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~') +
+        (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+        l.hash
+      );
     </script>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

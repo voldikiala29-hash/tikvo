@@ -55,8 +55,16 @@ export class TikTokBusinessApiService {
 
   constructor(initialConfig?: Partial<TikTokApiConfig>) {
     this.config = {
-      clientKey: initialConfig?.clientKey || (localStorage.getItem('TIKTOK_CLIENT_KEY') || 'awq89voldi72x1m'),
-      clientSecret: initialConfig?.clientSecret || (localStorage.getItem('TIKTOK_CLIENT_SECRET') || ''),
+      clientKey:
+        initialConfig?.clientKey ||
+        (typeof import.meta !== 'undefined' && import.meta.env?.VITE_TIKTOK_CLIENT_KEY) ||
+        localStorage.getItem('TIKTOK_CLIENT_KEY') ||
+        'awq89voldi72x1m',
+      clientSecret:
+        initialConfig?.clientSecret ||
+        (typeof import.meta !== 'undefined' && import.meta.env?.VITE_TIKTOK_CLIENT_SECRET) ||
+        localStorage.getItem('TIKTOK_CLIENT_SECRET') ||
+        '',
       redirectUri: initialConfig?.redirectUri || window.location.origin + '/oauth/tiktok/callback',
       scope: initialConfig?.scope || [
         'user.info.basic',

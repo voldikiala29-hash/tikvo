@@ -144,8 +144,11 @@ export async function fetchPexelsClips(
   const normalizedNiche = nicheId.toLowerCase().replace(/[^a-z]/g, '');
   const clips = NICHE_CURATED_CLIPS[normalizedNiche] || NICHE_CURATED_CLIPS.business;
 
-  // If user has Pexels API key configured in localStorage/environment, we can call official API:
-  const pexelsApiKey = localStorage.getItem('PEXELS_API_KEY');
+  // If user has Pexels API key configured in env or localStorage, we can call official API:
+  const pexelsApiKey =
+    (typeof import.meta !== 'undefined' && import.meta.env?.VITE_PEXELS_API_KEY) ||
+    localStorage.getItem('PEXELS_API_KEY') ||
+    '';
   if (pexelsApiKey && keywords.length > 0) {
     try {
       const query = encodeURIComponent(keywords.join(' '));
