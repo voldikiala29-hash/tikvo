@@ -1,118 +1,119 @@
-import { fetchPexelsClips } from './pexelsService';
-import { generateKaraokeTimings } from './edgeTtsService';
-import {
-  VideoClip,
-  KaraokeWord,
-  ViralTemplateProps,
-  VideoGenerationRequest,
-  VideoGenerationResponse,
-} from './types';
-import { tikTokApiService } from '../services/tiktokApiService';
+// Moteur vidéo côté navigateur : prépare l'aperçu, et délègue le vrai rendu et la publication au serveur.
+import { backend, JobView, PublishOptions } from '../services/backendApi';
+import { fetchPreviewClips } from './pexelsService';
+import { estimateWords, FPS, hookFramesFor } from './timeline';
+import type { ViralTemplateProps, VideoClip, VideoGenerationRequest } from './types';
 
-export class VideoEngineService {
-  /**
-   * Prepares the full Remotion ViralTemplate props based on user script and niche
-   */
-  public async prepareRemotionProps(
+export interface VideoGenerationResult {
+  success: true;
+  videoUrl: string;
+  duration: number;
+  renderId: string;
+  fps: number;
+  resolution: string;
+}
+
+const POLL_MS = 3000;
+const RENDER_TIMEOUT_MS = 15 * 60_000;
+const PUBLISH_TIMEOUT_MS = 25 * 60_000;
+const PREVIEW_HOOK_FRAMES = 90;
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Interroge le serveur jusqu'à ce que `done` soit vrai. */
+export async function waitForJob(
+  id: string,
+  done: (job: JobView) => boolean,
+  onTick: ((job: JobView) => void) | undefined,
+  timeoutMs: number,
+): Promise<JobView> {
+  const started = Date.now();
+  for (;;) {
+    const job = await backend.getJob(id);
+    onTick?.(job);
+    if (done(job)) return job;
+    if (Date.now() - started > timeoutMs) {
+      throw new Error('Délai dépassé : le serveur met trop de temps. Réessaie plus tard.');
+    }
+    await sleep(POLL_MS);
+  }
+}
+
+class VideoEngineService {
+  /** Aperçu : clips Pexels réels (si connecté) et sous-titres estimés. Aucune vidéo factice. */
+  async prepareRemotionProps(
     nicheId: string,
     nicheName: string,
     hook: string,
     scriptText: string,
-    keywords: string[] = []
-  ): Promise<{
-    props: ViralTemplateProps;
-    clips: VideoClip[];
-    karaokeWords: KaraokeWord[];
-  }> {
-    const clips = await fetchPexelsClips(nicheId, keywords);
-    const karaokeWords = generateKaraokeTimings(scriptText, 90, 30);
+    keywords: string[] = [],
+  ): Promise<{ props: ViralTemplateProps; clips: VideoClip[]; karaokeWords: ReturnType<typeof estimateWords> }> {
+    const clips = await fetchPreviewClips(nicheId, keywords);
+    const karaokeWords = estimateWords(scriptText, PREVIEW_HOOK_FRAMES, FPS);
+    const lastFrame = karaokeWords.length > 0 ? karaokeWords[karaokeWords.length - 1].endFrame : 0;
+    const totalDurationInFrames = Math.min(180 * FPS, Math.max(5 * FPS, lastFrame + Math.round(0.8 * FPS)));
 
     const props: ViralTemplateProps = {
       hookText: hook,
-      scriptText: scriptText,
-      nicheName: nicheName,
-      clips: clips,
-      karaokeWords: karaokeWords,
-      totalDurationInFrames: 900, // 30 seconds at 30fps
+      nicheName,
+      clips,
+      karaokeWords,
+      totalDurationInFrames,
+      hookFrames: hookFramesFor(hook, karaokeWords),
       brandTag: 'tikvo',
     };
-
     return { props, clips, karaokeWords };
   }
 
-  /**
-   * Generates a 1080x1920 30fps viral video and optionally posts to TikTok
-   */
-  public async generateVideo(
+  /** Vrai rendu : voix off, clips, montage 1080×1920, faits sur le serveur de rendu. */
+  async generateVideo(
     request: VideoGenerationRequest,
-    onProgress?: (step: string, percentage: number) => void
-  ): Promise<VideoGenerationResponse> {
-    onProgress?.('Recherche des 3 clips Pexels 4K verticaux...', 20);
-    const clips = await fetchPexelsClips(request.niche, request.keywords);
+    onProgress?: (step: string, percentage: number) => void,
+  ): Promise<VideoGenerationResult> {
+    onProgress?.('Envoi de la demande au serveur…', 3);
+    const job = await backend.createJob({
+      niche: request.niche,
+      hook: request.hook,
+      script: request.script,
+      keywords: request.keywords,
+      voice: request.voice,
+      pexelsIds: request.pexelsIds,
+    });
 
-    onProgress?.('Génération de la voix TikTok edge-tts & synchronisation karaoké...', 45);
-    const karaokeWords = generateKaraokeTimings(request.script, 90, 30);
-
-    onProgress?.('Rendu Remotion 1080x1920 (Ken Burns + Hook 0-3s + Barre rose)...', 75);
-    // Call backend API /api/generate-video if reachable
-    let renderResultUrl = clips[0]?.url || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
-    const renderId = 'tikvo_render_' + Math.random().toString(36).substring(2, 9);
-
-    try {
-      const response = await fetch('/api/generate-video', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          niche: request.niche,
-          script: request.script,
-          hook: request.hook,
-          keywords: request.keywords,
-        }),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        if (data.videoUrl) renderResultUrl = data.videoUrl;
-      }
-    } catch (e) {
-      console.warn('[VideoEngine] Backend call skipped or running client-rendered mode:', e);
+    const done = await waitForJob(
+      job.id,
+      (j) => j.status === 'rendered' || j.status === 'failed',
+      (j) => onProgress?.(j.step || 'Rendu en cours…', Math.max(5, j.progress)),
+      RENDER_TIMEOUT_MS,
+    );
+    if (done.status === 'failed' || !done.videoUrl) {
+      throw new Error(done.error || 'Le rendu a échoué.');
     }
 
-    onProgress?.('Finalisation du conteneur MP4 haute performance...', 90);
-
-    let tiktokPostResult = undefined;
-    if (request.autoPostToTikTok) {
-      onProgress?.('Publication automatique vers TikTok Business Direct Post...', 98);
-      try {
-        const postRes = await tikTokApiService.publishVideo({
-          caption: `${request.hook} 🚀 Vidéo 100% automatisée par tikvo. #TikTokViral #${request.niche}`,
-          privacyLevel: 'PUBLIC_TO_EVERYONE',
-          disableDuet: false,
-          disableStitch: false,
-          disableComment: false,
-          brandCommercialContent: false,
-          brandOrganicCommercialContent: true,
-        });
-        tiktokPostResult = {
-          publishId: postRes.publishId,
-          status: 'SUCCESS',
-        };
-      } catch (err) {
-        console.error('[TikTok Auto-Post Error]', err);
-      }
-    }
-
-    onProgress?.('Vidéo générée et prête !', 100);
-
+    onProgress?.('Vidéo prête', 100);
     return {
       success: true,
-      videoUrl: renderResultUrl,
-      duration: 30,
-      renderId: renderId,
+      videoUrl: done.videoUrl,
+      duration: done.durationSec ?? 0,
+      renderId: done.id,
       fps: 30,
       resolution: '1080x1920',
-      clipsUsed: clips.map((c) => c.keyword),
-      tiktokPostResult,
     };
+  }
+
+  /** Publication réelle (immédiate ou programmée) d'une vidéo déjà rendue. */
+  async publish(
+    jobId: string,
+    options: PublishOptions,
+    onTick?: (job: JobView) => void,
+  ): Promise<JobView> {
+    await backend.publishJob(jobId, options);
+    return waitForJob(
+      jobId,
+      (j) => j.status === 'published' || j.status === 'scheduled' || (j.status === 'rendered' && Boolean(j.publish.error)),
+      onTick,
+      PUBLISH_TIMEOUT_MS,
+    );
   }
 }
 

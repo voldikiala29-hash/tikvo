@@ -25,6 +25,7 @@ interface SidebarProps {
   onOpenCustomNicheModal: () => void;
   isTikTokConnected: boolean;
   onOpenConnectModal: () => void;
+  tikTokHandle?: string;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -38,6 +39,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenCustomNicheModal,
   isTikTokConnected,
   onOpenConnectModal,
+  tikTokHandle,
   isOpen,
   onClose,
 }) => {
@@ -238,10 +240,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex items-center justify-between text-xs text-gray-300">
             <div className="truncate">
               <p className="font-medium text-white truncate text-[11px]">
-                {isTikTokConnected ? '@voldi_creator_pro' : 'Connexion requise'}
+                {isTikTokConnected ? tikTokHandle || 'Compte connecté' : 'Connexion requise'}
               </p>
               <p className="text-[9px] text-gray-400">
-                {isTikTokConnected ? 'Auto-Post & Direct API prêts' : 'Clique pour lier ton profil'}
+                {isTikTokConnected ? 'Publication TikTok active' : 'Clique pour lier ton profil'}
               </p>
             </div>
             <ChevronRight

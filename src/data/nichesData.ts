@@ -95,8 +95,8 @@ export const INITIAL_NICHES: Record<string, NicheData> = {
       { id: 'ma-2', brand: 'NA-KD Fashion', offer: 'Code promo créateur 20% + 15% revshare', payout: '15% net', conversionRate: '4.2%', status: 'Actif', link: 'https://creators.tiktok.com/nakd' },
     ],
     accounts: [
-      { id: 'acc-m1', handle: '@tikvo_fashion_pro', displayName: 'tikvo style studio', avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150', nicheId: 'mode', followers: 118400, totalLikes: '3.2M', avgViews: '85K', engagementRate: '8.4%', apiConnected: true, autoPostEnabled: true, shadowbanRisk: 'Aucun', creatorRewardsEligible: true },
-      { id: 'acc-m2', handle: '@capsule_tikvo', displayName: 'capsule wardrobe daily', avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', nicheId: 'mode', followers: 24100, totalLikes: '610K', avgViews: '32K', engagementRate: '9.1%', apiConnected: true, autoPostEnabled: false, shadowbanRisk: 'Aucun', creatorRewardsEligible: true },
+      { id: 'acc-m1', handle: '@tikvo_fashion_pro', displayName: 'tikvo style studio', avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150', nicheId: 'mode', followers: 118400, totalLikes: '3.2M', avgViews: '85K', engagementRate: '8.4%', apiConnected: false, autoPostEnabled: true, shadowbanRisk: 'Aucun', creatorRewardsEligible: true },
+      { id: 'acc-m2', handle: '@capsule_tikvo', displayName: 'capsule wardrobe daily', avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', nicheId: 'mode', followers: 24100, totalLikes: '610K', avgViews: '32K', engagementRate: '9.1%', apiConnected: false, autoPostEnabled: false, shadowbanRisk: 'Aucun', creatorRewardsEligible: true },
     ],
     targetAudience: {
       ageRange: '18 - 34 ans',
@@ -197,7 +197,7 @@ export const INITIAL_NICHES: Record<string, NicheData> = {
       { id: 'ca-2', brand: 'HelloFresh Partenaires', offer: '18 € par nouvelle souscription validée', payout: '18,00 € fixe', conversionRate: '5.1%', status: 'Top Performer', link: 'https://creators.tiktok.com/hellofresh' },
     ],
     accounts: [
-      { id: 'acc-c1', handle: '@chef_voldi_express', displayName: 'Chef Voldi Express', avatarUrl: 'https://images.unsplash.com/photo-1577219491135-ce391730fb2c?w=150', nicheId: 'cuisine', followers: 215800, totalLikes: '6.4M', avgViews: '140K', engagementRate: '11.2%', apiConnected: true, autoPostEnabled: true, shadowbanRisk: 'Aucun', creatorRewardsEligible: true },
+      { id: 'acc-c1', handle: '@chef_voldi_express', displayName: 'Chef Voldi Express', avatarUrl: 'https://images.unsplash.com/photo-1577219491135-ce391730fb2c?w=150', nicheId: 'cuisine', followers: 215800, totalLikes: '6.4M', avgViews: '140K', engagementRate: '11.2%', apiConnected: false, autoPostEnabled: true, shadowbanRisk: 'Aucun', creatorRewardsEligible: true },
     ],
     targetAudience: {
       ageRange: '20 - 45 ans',
@@ -298,7 +298,7 @@ export const INITIAL_NICHES: Record<string, NicheData> = {
       { id: 'ba-2', brand: 'Trade Republic Affiliation', offer: '25 € par compte validé + 1 action gratuite', payout: '25,00 € net', conversionRate: '6.4%', status: 'Top Performer', link: 'https://creators.tiktok.com/traderepublic' },
     ],
     accounts: [
-      { id: 'acc-b1', handle: '@voldi_business_hub', displayName: 'Voldi Business & Hustle', avatarUrl: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=150', nicheId: 'business', followers: 98200, totalLikes: '2.1M', avgViews: '72K', engagementRate: '9.6%', apiConnected: true, autoPostEnabled: true, shadowbanRisk: 'Aucun', creatorRewardsEligible: true },
+      { id: 'acc-b1', handle: '@voldi_business_hub', displayName: 'Voldi Business & Hustle', avatarUrl: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=150', nicheId: 'business', followers: 98200, totalLikes: '2.1M', avgViews: '72K', engagementRate: '9.6%', apiConnected: false, autoPostEnabled: true, shadowbanRisk: 'Aucun', creatorRewardsEligible: true },
     ],
     targetAudience: {
       ageRange: '20 - 38 ans',
@@ -381,7 +381,7 @@ export const INITIAL_NICHES: Record<string, NicheData> = {
       { id: 'bea-aff1', brand: 'Sephora Creator Squad', offer: '10% sur le panier + cadeaux', payout: '10% net', conversionRate: '5.4%', status: 'Top Performer', link: 'https://creators.tiktok.com/sephora' },
     ],
     accounts: [
-      { id: 'acc-be1', handle: '@voldi_beauty_glow', displayName: 'Voldi Beauty Lab', avatarUrl: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=150', nicheId: 'beaute', followers: 178400, totalLikes: '5.1M', avgViews: '110K', engagementRate: '10.5%', apiConnected: true, autoPostEnabled: true, shadowbanRisk: 'Aucun', creatorRewardsEligible: true },
+      { id: 'acc-be1', handle: '@voldi_beauty_glow', displayName: 'Voldi Beauty Lab', avatarUrl: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=150', nicheId: 'beaute', followers: 178400, totalLikes: '5.1M', avgViews: '110K', engagementRate: '10.5%', apiConnected: false, autoPostEnabled: true, shadowbanRisk: 'Aucun', creatorRewardsEligible: true },
     ],
     targetAudience: {
       ageRange: '16 - 32 ans',
@@ -464,7 +464,7 @@ export const INITIAL_NICHES: Record<string, NicheData> = {
       { id: 'fia-1', brand: 'MyProtein Ambassadeur', offer: 'Code 40% + 12% commission net', payout: '12% net', conversionRate: '4.5%', status: 'Top Performer', link: 'https://creators.tiktok.com/myprotein' },
     ],
     accounts: [
-      { id: 'acc-fi1', handle: '@voldi_iron_fit', displayName: 'Voldi Fitness Elite', avatarUrl: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=150', nicheId: 'fitness', followers: 124000, totalLikes: '3.9M', avgViews: '82K', engagementRate: '8.9%', apiConnected: true, autoPostEnabled: true, shadowbanRisk: 'Aucun', creatorRewardsEligible: true },
+      { id: 'acc-fi1', handle: '@voldi_iron_fit', displayName: 'Voldi Fitness Elite', avatarUrl: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=150', nicheId: 'fitness', followers: 124000, totalLikes: '3.9M', avgViews: '82K', engagementRate: '8.9%', apiConnected: false, autoPostEnabled: true, shadowbanRisk: 'Aucun', creatorRewardsEligible: true },
     ],
     targetAudience: {
       ageRange: '18 - 35 ans',
@@ -533,7 +533,7 @@ export const INITIAL_NICHES: Record<string, NicheData> = {
       { id: 'eda-1', brand: 'Blinkist / Koober', offer: '15 € par abonnement annuel', payout: '15,00 €', conversionRate: '4.1%', status: 'Top Performer', link: 'https://creators.tiktok.com/blinkist' },
     ],
     accounts: [
-      { id: 'acc-ed1', handle: '@voldi_curieux', displayName: 'Voldi Culture & Faits', avatarUrl: 'https://images.unsplash.com/photo-1532012164546-f432f2e3777a?w=150', nicheId: 'education', followers: 190200, totalLikes: '7.8M', avgViews: '165K', engagementRate: '12.4%', apiConnected: true, autoPostEnabled: true, shadowbanRisk: 'Aucun', creatorRewardsEligible: true },
+      { id: 'acc-ed1', handle: '@voldi_curieux', displayName: 'Voldi Culture & Faits', avatarUrl: 'https://images.unsplash.com/photo-1532012164546-f432f2e3777a?w=150', nicheId: 'education', followers: 190200, totalLikes: '7.8M', avgViews: '165K', engagementRate: '12.4%', apiConnected: false, autoPostEnabled: true, shadowbanRisk: 'Aucun', creatorRewardsEligible: true },
     ],
     targetAudience: {
       ageRange: '16 - 45 ans',
@@ -590,7 +590,7 @@ export const INITIAL_NICHES: Record<string, NicheData> = {
       { id: 'coa-1', brand: 'NordVPN Campagne Influence', offer: '35 € par souscription', payout: '35,00 €', conversionRate: '2.8%', status: 'Actif', link: 'https://creators.tiktok.com/nordvpn' },
     ],
     accounts: [
-      { id: 'acc-co1', handle: '@voldi_rire', displayName: 'Voldi Le Studio Rire', avatarUrl: 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=150', nicheId: 'comedie', followers: 280100, totalLikes: '12.4M', avgViews: '240K', engagementRate: '13.8%', apiConnected: true, autoPostEnabled: true, shadowbanRisk: 'Aucun', creatorRewardsEligible: true },
+      { id: 'acc-co1', handle: '@voldi_rire', displayName: 'Voldi Le Studio Rire', avatarUrl: 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=150', nicheId: 'comedie', followers: 280100, totalLikes: '12.4M', avgViews: '240K', engagementRate: '13.8%', apiConnected: false, autoPostEnabled: true, shadowbanRisk: 'Aucun', creatorRewardsEligible: true },
     ],
     targetAudience: {
       ageRange: '15 - 30 ans',
@@ -647,7 +647,7 @@ export const INITIAL_NICHES: Record<string, NicheData> = {
       { id: 'mua-1', brand: 'Plugin Boutique Music', offer: '15% sur les logiciels de MAO', payout: '15% net', conversionRate: '3.6%', status: 'Actif', link: 'https://creators.tiktok.com/pluginboutique' },
     ],
     accounts: [
-      { id: 'acc-mu1', handle: '@voldi_music_beat', displayName: 'Voldi Beat Lab', avatarUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=150', nicheId: 'musique', followers: 136700, totalLikes: '4.2M', avgViews: '92K', engagementRate: '9.8%', apiConnected: true, autoPostEnabled: true, shadowbanRisk: 'Aucun', creatorRewardsEligible: true },
+      { id: 'acc-mu1', handle: '@voldi_music_beat', displayName: 'Voldi Beat Lab', avatarUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=150', nicheId: 'musique', followers: 136700, totalLikes: '4.2M', avgViews: '92K', engagementRate: '9.8%', apiConnected: false, autoPostEnabled: true, shadowbanRisk: 'Aucun', creatorRewardsEligible: true },
     ],
     targetAudience: {
       ageRange: '16 - 32 ans',
@@ -704,7 +704,7 @@ export const INITIAL_NICHES: Record<string, NicheData> = {
       { id: 'gaa-1', brand: 'Razer Affiliation Pro', offer: '8% sur tous les périphériques', payout: '8% net', conversionRate: '4.9%', status: 'Top Performer', link: 'https://creators.tiktok.com/razer' },
     ],
     accounts: [
-      { id: 'acc-ga1', handle: '@voldi_gaming_zone', displayName: 'Voldi Gaming Hub', avatarUrl: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=150', nicheId: 'gaming', followers: 156900, totalLikes: '5.6M', avgViews: '115K', engagementRate: '10.2%', apiConnected: true, autoPostEnabled: true, shadowbanRisk: 'Aucun', creatorRewardsEligible: true },
+      { id: 'acc-ga1', handle: '@voldi_gaming_zone', displayName: 'Voldi Gaming Hub', avatarUrl: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=150', nicheId: 'gaming', followers: 156900, totalLikes: '5.6M', avgViews: '115K', engagementRate: '10.2%', apiConnected: false, autoPostEnabled: true, shadowbanRisk: 'Aucun', creatorRewardsEligible: true },
     ],
     targetAudience: {
       ageRange: '14 - 28 ans',
@@ -761,7 +761,7 @@ export const INITIAL_NICHES: Record<string, NicheData> = {
       { id: 'lia-1', brand: 'Notion Plus / Templates', offer: '20% récurrent sur 12 mois', payout: '20% mrr', conversionRate: '4.8%', status: 'Top Performer', link: 'https://creators.tiktok.com/notion' },
     ],
     accounts: [
-      { id: 'acc-li1', handle: '@voldi_lifestyle', displayName: 'Voldi Daily Life', avatarUrl: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150', nicheId: 'lifestyle', followers: 148000, totalLikes: '4.8M', avgViews: '88K', engagementRate: '9.1%', apiConnected: true, autoPostEnabled: true, shadowbanRisk: 'Aucun', creatorRewardsEligible: true },
+      { id: 'acc-li1', handle: '@voldi_lifestyle', displayName: 'Voldi Daily Life', avatarUrl: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150', nicheId: 'lifestyle', followers: 148000, totalLikes: '4.8M', avgViews: '88K', engagementRate: '9.1%', apiConnected: false, autoPostEnabled: true, shadowbanRisk: 'Aucun', creatorRewardsEligible: true },
     ],
     targetAudience: {
       ageRange: '18 - 35 ans',

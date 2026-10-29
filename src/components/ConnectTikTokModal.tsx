@@ -1,17 +1,6 @@
-import React, { useState } from 'react';
-import {
-  X,
-  Radio,
-  CheckCircle2,
-  AlertCircle,
-  Key,
-  ShieldCheck,
-  ExternalLink,
-  RefreshCw,
-  LogOut,
-  Sparkles,
-} from 'lucide-react';
-import { tikTokApiService } from '../services/tiktokApiService';
+import React, { useEffect, useState } from 'react';
+import { X, Radio, CheckCircle2, AlertCircle, ShieldCheck, LogOut, RefreshCw } from 'lucide-react';
+import { ApiError, backend, forgetSession, isApiConfigured, Me, startTikTokLogin } from '../services/backendApi';
 
 interface ConnectTikTokModalProps {
   isOpen: boolean;
@@ -26,49 +15,74 @@ export const ConnectTikTokModal: React.FC<ConnectTikTokModalProps> = ({
   isConnected,
   onConnectionChange,
 }) => {
-  const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'oauth' | 'credentials'>('oauth');
-  const [clientKey, setClientKey] = useState(
-    localStorage.getItem('TIKTOK_CLIENT_KEY') || 'awq89voldi72x1m'
-  );
-  const [clientSecret, setClientSecret] = useState(
-    localStorage.getItem('TIKTOK_CLIENT_SECRET') || '••••••••••••••••••••••••'
-  );
-  const [environment, setEnvironment] = useState<'sandbox' | 'live'>('live');
+  const [me, setMe] = useState<Me | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Charge le profil réel quand la fenêtre s'ouvre avec une session.
+  useEffect(() => {
+    if (!isOpen || !isConnected) {
+      setMe(null);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    backend
+      .me()
+      .then((data) => {
+        if (!cancelled) setMe(data);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        if (err instanceof ApiError && err.status === 401) {
+          onConnectionChange(false);
+        }
+        setError(err instanceof Error ? err.message : 'Impossible de charger le compte.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, isConnected]);
 
   if (!isOpen) return null;
 
-  const handleSimulateOAuthConnect = async () => {
-    setLoading(true);
+  const handleLogin = () => {
+    setError(null);
     try {
-      await tikTokApiService.exchangeCodeForToken('auth_code_simulated_' + Date.now());
-      onConnectionChange(true);
-      setTimeout(() => {
-        setLoading(false);
-        onClose();
-      }, 700);
-    } catch (error) {
-      console.error(error);
-      setLoading(false);
+      startTikTokLogin();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Connexion impossible.');
     }
   };
 
-  const handleDisconnect = () => {
-    tikTokApiService.disconnect();
-    onConnectionChange(false);
+  const handleDisconnect = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      await backend.disconnect();
+    } catch (err) {
+      // Session déjà expirée côté serveur : on oublie quand même la session locale.
+      forgetSession();
+      setError(err instanceof Error ? err.message : 'Déconnexion partielle.');
+    } finally {
+      setLoading(false);
+      onConnectionChange(false);
+    }
   };
 
-  const handleSaveCredentials = () => {
-    localStorage.setItem('TIKTOK_CLIENT_KEY', clientKey);
-    localStorage.setItem('TIKTOK_CLIENT_SECRET', clientSecret);
-    onConnectionChange(true);
-    onClose();
-  };
+  const statusLabel = isConnected
+    ? me
+      ? `Connecté (@${me.username || me.displayName})`
+      : 'Connecté'
+    : 'Non synchronisé';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-xl bg-[#12121A] border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-        {/* Header */}
+      <div className="relative w-full max-w-xl bg-[#12121A] border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-white/10 flex items-center justify-between bg-[#1A1A27]">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-black border border-white/10 flex items-center justify-center">
@@ -77,189 +91,124 @@ export const ConnectTikTokModal: React.FC<ConnectTikTokModalProps> = ({
               </svg>
             </div>
             <div>
-              <h2 className="text-lg font-black text-white">Connexion TikTok Business & Direct Post API</h2>
-              <p className="text-xs text-gray-400">
-                Synchronisation officielle pour poster, analyser et automatiser.
-              </p>
+              <h2 className="text-lg font-black text-white">Connexion TikTok</h2>
+              <p className="text-xs text-gray-400">Autorise tikvo à publier tes vidéos sur ton compte.</p>
             </div>
           </div>
-
           <button
             onClick={onClose}
+            aria-label="Fermer"
             className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-all"
           >
             <X size={16} />
           </button>
         </div>
 
-        {/* Status Banner */}
-        <div className="px-6 py-3 bg-[#08080D]/60 border-b border-white/5 flex items-center justify-between text-xs">
-          <div className="flex items-center gap-2">
-            <span className="text-gray-400">Statut de la connexion :</span>
-            {isConnected ? (
-              <span className="flex items-center gap-1.5 font-bold text-[#00FFC6]">
-                <CheckCircle2 size={14} /> Connecté (@tikvo_creator_pro)
-              </span>
-            ) : (
-              <span className="flex items-center gap-1.5 font-bold text-[#FF2E93]">
-                <AlertCircle size={14} /> Non synchronisé
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-gray-400">Mode :</span>
-            <div className="flex rounded-lg bg-white/5 p-0.5 text-[10px] font-bold">
-              <button
-                onClick={() => setEnvironment('live')}
-                className={`px-2 py-0.5 rounded-md ${
-                  environment === 'live' ? 'bg-[#00FFC6] text-black' : 'text-gray-400'
-                }`}
-              >
-                Production
-              </button>
-              <button
-                onClick={() => setEnvironment('sandbox')}
-                className={`px-2 py-0.5 rounded-md ${
-                  environment === 'sandbox' ? 'bg-[#7C3AED] text-white' : 'text-gray-400'
-                }`}
-              >
-                Sandbox
-              </button>
-            </div>
-          </div>
+        <div className="px-6 py-3 bg-[#08080D]/60 border-b border-white/5 flex items-center gap-2 text-xs">
+          <span className="text-gray-400">Statut :</span>
+          {isConnected ? (
+            <span className="flex items-center gap-1.5 font-bold text-[#00FFC6]">
+              <CheckCircle2 size={14} /> {statusLabel}
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5 font-bold text-[#FF2E93]">
+              <AlertCircle size={14} /> {statusLabel}
+            </span>
+          )}
+          {loading && <RefreshCw size={12} className="animate-spin text-gray-400 ml-2" />}
         </div>
 
-        {/* Body Tabs */}
         <div className="p-6 space-y-5">
+          {error && (
+            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs">{error}</div>
+          )}
+
+          {!isApiConfigured() && (
+            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs">
+              Le serveur tikvo n'est pas encore configuré pour ce site (variable VITE_API_URL).
+            </div>
+          )}
+
           {isConnected ? (
             <div className="space-y-4">
-              <div className="p-4 rounded-xl bg-[#1A1A27] border border-[#00FFC6]/30 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <img
-                    src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150"
-                    alt="Avatar"
-                    className="w-12 h-12 rounded-full border-2 border-[#00FFC6]"
-                  />
-                  <div>
+              <div className="p-4 rounded-xl bg-[#1A1A27] border border-[#00FFC6]/30 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  {me?.avatarUrl ? (
+                    <img src={me.avatarUrl} alt="Avatar" className="w-12 h-12 rounded-full border-2 border-[#00FFC6] shrink-0" />
+                  ) : (
+                    <div className="w-12 h-12 rounded-full bg-[#00FFC6]/10 border-2 border-[#00FFC6]/40 shrink-0" />
+                  )}
+                  <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-bold text-white text-sm">@tikvo_creator_pro</span>
-                      <ShieldCheck size={14} className="text-[#00FFC6]" />
+                      <span className="font-bold text-white text-sm truncate">
+                        {me ? `@${me.username || me.displayName}` : '…'}
+                      </span>
+                      <ShieldCheck size={14} className="text-[#00FFC6] shrink-0" />
                     </div>
-                    <p className="text-xs text-gray-400">TikTok Business Creator Verified</p>
-                    <p className="text-[11px] text-[#00FFC6] mt-0.5">Direct Post API : Activé • Auto-Post : Prêt</p>
+                    {me?.stats && (
+                      <p className="text-[11px] text-gray-400">
+                        {me.stats.followers.toLocaleString('fr-FR')} abonnés · {me.stats.videos} vidéos
+                      </p>
+                    )}
                   </div>
                 </div>
-
                 <button
                   onClick={handleDisconnect}
-                  className="px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all"
+                  disabled={loading}
+                  className="px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all shrink-0 disabled:opacity-50"
                 >
                   <LogOut size={13} />
                   <span>Déconnecter</span>
                 </button>
               </div>
 
-              {/* Authorized Scopes */}
               <div className="p-4 rounded-xl bg-[#08080D] border border-white/5 space-y-2">
-                <p className="text-xs font-bold text-white uppercase tracking-wider">
-                  Autorisations Actives (Scopes TikTok API v2)
-                </p>
-                <div className="grid grid-cols-2 gap-2 text-xs text-gray-300">
-                  <div className="flex items-center gap-2 text-[#00FFC6]">
-                    <CheckCircle2 size={13} /> <span>video.publish (Publication directe)</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-[#00FFC6]">
-                    <CheckCircle2 size={13} /> <span>video.upload (Upload automatisé)</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-[#00FFC6]">
-                    <CheckCircle2 size={13} /> <span>user.info.stats (Statistiques live)</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-[#00FFC6]">
-                    <CheckCircle2 size={13} /> <span>research.adlib (Radar tendances)</span>
-                  </div>
+                <p className="text-xs font-bold text-white uppercase tracking-wider">Autorisations accordées</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  {(me?.scopes ?? []).map((scope) => (
+                    <div key={scope} className="flex items-center gap-2 text-[#00FFC6]">
+                      <CheckCircle2 size={13} /> <span>{scope}</span>
+                    </div>
+                  ))}
                 </div>
+                {me && !me.canPublish && (
+                  <p className="text-xs text-amber-300 pt-2">
+                    La publication n'est pas autorisée : reconnecte TikTok et accepte l'accès à la publication de vidéos.
+                  </p>
+                )}
               </div>
+
+              <p className="text-[11px] text-gray-400">
+                Tant que l'app tikvo n'a pas été validée par TikTok (audit), les vidéos ne peuvent être publiées qu'en privé.
+              </p>
 
               <button
                 onClick={onClose}
                 className="w-full py-2.5 rounded-xl bg-[#00FFC6] text-black font-bold text-xs hover:bg-[#00FFC6]/90 transition-all"
               >
-                Fermer et retourner au Dashboard
+                Fermer
               </button>
             </div>
           ) : (
             <div className="space-y-4">
               <div className="text-center p-4 rounded-2xl bg-gradient-to-b from-[#1A1A27] to-transparent border border-white/5">
                 <div className="w-12 h-12 rounded-full bg-[#00FFC6]/10 text-[#00FFC6] mx-auto flex items-center justify-center mb-3">
-                  <Sparkles size={24} />
+                  <Radio size={22} />
                 </div>
-                <h3 className="font-black text-white text-base">Autoriser l'accès TikTok en 1 clic</h3>
+                <h3 className="font-black text-white text-base">Connecte ton compte TikTok</h3>
                 <p className="text-xs text-gray-400 mt-1 max-w-md mx-auto leading-relaxed">
-                  Connecte ton compte TikTok pour poster automatiquement tes scripts programmés, récupérer les sons viraux en temps réel et suivre tes revenus.
+                  Tu seras redirigé vers TikTok pour accepter les autorisations. tikvo ne voit jamais ton mot de passe.
                 </p>
               </div>
 
-              <div className="space-y-2 text-xs text-gray-300 bg-[#08080D] p-3 rounded-xl border border-white/5">
-                <div className="flex items-center gap-2 text-gray-200">
-                  <CheckCircle2 size={14} className="text-[#00FFC6]" />
-                  <span>Publication directe sans passer par l'application mobile</span>
-                </div>
-                <div className="flex items-center gap-2 text-gray-200">
-                  <CheckCircle2 size={14} className="text-[#00FFC6]" />
-                  <span>Contournement du shadowban grâce aux métadonnées officielles</span>
-                </div>
-                <div className="flex items-center gap-2 text-gray-200">
-                  <CheckCircle2 size={14} className="text-[#00FFC6]" />
-                  <span>Support multi-comptes pour gérer toutes tes niches</span>
-                </div>
-              </div>
-
               <button
-                onClick={handleSimulateOAuthConnect}
-                disabled={loading}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-[#FF2E93] via-[#7C3AED] to-[#00FFC6] text-white font-black text-sm hover:opacity-95 transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#FF2E93]/20"
+                onClick={handleLogin}
+                disabled={!isApiConfigured()}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-[#FF2E93] via-[#7C3AED] to-[#00FFC6] text-white font-black text-sm hover:opacity-95 transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#FF2E93]/20 disabled:opacity-50"
               >
-                {loading ? (
-                  <>
-                    <RefreshCw size={16} className="animate-spin" />
-                    <span>Synchronisation TikTok en cours...</span>
-                  </>
-                ) : (
-                  <>
-                    <Radio size={16} />
-                    <span>Connecter avec TikTok (OAuth v2)</span>
-                  </>
-                )}
+                <Radio size={16} />
+                <span>Connecter avec TikTok</span>
               </button>
-
-              <div className="pt-2 text-center">
-                <span className="text-[11px] text-gray-400">
-                  Besoin de configurer des clés personnalisées de développeur TikTok ?
-                </span>
-                <div className="mt-2 text-left space-y-2">
-                  <input
-                    type="text"
-                    value={clientKey}
-                    onChange={(e) => setClientKey(e.target.value)}
-                    placeholder="TikTok Client Key"
-                    className="w-full px-3 py-2 rounded-xl bg-[#08080D] border border-white/10 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#00FFC6]"
-                  />
-                  <input
-                    type="password"
-                    value={clientSecret}
-                    onChange={(e) => setClientSecret(e.target.value)}
-                    placeholder="TikTok Client Secret"
-                    className="w-full px-3 py-2 rounded-xl bg-[#08080D] border border-white/10 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#00FFC6]"
-                  />
-                  <button
-                    onClick={handleSaveCredentials}
-                    className="w-full py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition-all"
-                  >
-                    Enregistrer les identifiants API
-                  </button>
-                </div>
-              </div>
             </div>
           )}
         </div>

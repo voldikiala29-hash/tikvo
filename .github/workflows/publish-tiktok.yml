@@ -1,0 +1,45 @@
+name: Publish to TikTok
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: "Identifiant du job (UUID)"
+        required: true
+        type: string
+      api_url:
+        description: "URL du Worker tikvo-api"
+        required: true
+        type: string
+
+concurrency:
+  group: publish-${{ inputs.job_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      JOB_ID: ${{ inputs.job_id }}
+      API_URL: ${{ inputs.api_url }}
+      RENDER_SECRET: ${{ secrets.RENDER_SECRET }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Dépendances système (ffprobe)
+        run: sudo apt-get install -y ffmpeg
+
+      - name: Dépendances Node
+        run: npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+
+      - name: Publication sur TikTok
+        run: npm run pipeline:publish

@@ -14,7 +14,7 @@ import { MonetizationView } from './views/MonetizationView';
 import { SettingsView } from './views/SettingsView';
 import { INITIAL_NICHES, generate10ViralIdeas } from './data/nichesData';
 import { NicheData, NicheId, ScheduledPost, ViralIdea } from './types/tiktok';
-import { tikTokApiService } from './services/tiktokApiService';
+import { backend, consumeTikTokRedirect, forgetSession, getSessionToken, ApiError } from './services/backendApi';
 import { FirebaseProvider, useFirebase } from './contexts/FirebaseContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -84,9 +84,33 @@ function TikvoDashboard() {
   };
 
   // TikTok API Connection State
-  const [isTikTokConnected, setIsTikTokConnected] = useState<boolean>(() =>
-    tikTokApiService.isConnected()
-  );
+  // Ordre important : on lit d'abord le retour de TikTok (qui crée la session), puis l'état de connexion.
+  const [ttRedirectError, setTtRedirectError] = useState<string | null>(() => consumeTikTokRedirect());
+  const [isTikTokConnected, setIsTikTokConnected] = useState<boolean>(() => Boolean(getSessionToken()));
+  const [tikTokHandle, setTikTokHandle] = useState<string>('');
+
+  useEffect(() => {
+    if (!isTikTokConnected) {
+      setTikTokHandle('');
+      return;
+    }
+    let cancelled = false;
+    backend
+      .me()
+      .then((me) => {
+        if (!cancelled) setTikTokHandle(me.username ? `@${me.username}` : me.displayName);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        if (err instanceof ApiError && err.status === 401) {
+          forgetSession();
+          setIsTikTokConnected(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isTikTokConnected]);
 
   // Modals state
   const [isViralIdeasModalOpen, setIsViralIdeasModalOpen] = useState<boolean>(false);
@@ -238,6 +262,7 @@ function TikvoDashboard() {
         onOpenCustomNicheModal={() => setIsCustomNicheModalOpen(true)}
         isTikTokConnected={isTikTokConnected}
         onOpenConnectModal={() => setIsConnectModalOpen(true)}
+        tikTokHandle={tikTokHandle}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
       />
@@ -258,6 +283,15 @@ function TikvoDashboard() {
 
         {/* 3. Dynamic Views */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 lg:ml-64 overflow-y-auto">
+          {ttRedirectError && (
+            <div className="mb-6 p-4 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-200 text-xs sm:text-sm flex items-start justify-between gap-4">
+              <span>Connexion TikTok : {ttRedirectError}</span>
+              <button onClick={() => setTtRedirectError(null)} className="text-red-300 hover:text-white font-bold">
+                Fermer
+              </button>
+            </div>
+          )}
+
           {/* Alerte si la configuration Firebase est manquante */}
           {!isFirebaseConfigured && (
             <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 flex items-center justify-between text-amber-200 text-xs sm:text-sm shadow-lg shadow-amber-950/20">
