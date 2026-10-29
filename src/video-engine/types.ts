@@ -6,43 +6,33 @@ export interface KaraokeWord {
 
 export interface VideoClip {
   id: string;
-  url: string;
-  thumbnailUrl: string;
-  source: 'pexels' | 'stock';
-  keyword: string;
+  /** URL https (aperçu navigateur) ou chemin relatif au dossier public (rendu serveur). */
+  src: string;
+  thumbnailUrl?: string;
+  /** Durée de la vidéo source en frames (0 si inconnue). */
   durationInFrames: number;
+  credit?: string;
 }
 
-export interface ViralTemplateProps {
+// `type` (et non `interface`) : Remotion exige un type compatible Record<string, unknown>.
+export type ViralTemplateProps = {
   hookText: string;
-  scriptText: string;
   nicheName: string;
   clips: VideoClip[];
   karaokeWords: KaraokeWord[];
-  musicUrl?: string;
-  fps?: number;
-  totalDurationInFrames?: number;
+  /** Voix off (URL https ou chemin relatif au dossier public). Absente dans l'aperçu. */
+  audioSrc?: string;
+  totalDurationInFrames: number;
+  /** Durée d'affichage du gros hook, en frames (90 par défaut). */
+  hookFrames?: number;
   brandTag?: string;
-}
+};
 
 export interface VideoGenerationRequest {
-  niche: string;
+  niche: { id: string; name: string };
   script: string;
   hook: string;
   keywords: string[];
-  autoPostToTikTok?: boolean;
-}
-
-export interface VideoGenerationResponse {
-  success: boolean;
-  videoUrl: string;
-  duration: number;
-  renderId: string;
-  fps: number;
-  resolution: string;
-  clipsUsed: string[];
-  tiktokPostResult?: {
-    publishId: string;
-    status: string;
-  };
+  voice: string;
+  pexelsIds: number[];
 }

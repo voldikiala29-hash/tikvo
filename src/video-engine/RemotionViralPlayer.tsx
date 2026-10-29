@@ -1,7 +1,7 @@
-import React, { useRef } from 'react';
-import { Player, PlayerRef } from '@remotion/player';
+import React from 'react';
+import { Player } from '@remotion/player';
 import { ViralTemplate } from './ViralTemplate';
-import { ViralTemplateProps } from './types';
+import type { ViralTemplateProps } from './types.ts';
 
 interface RemotionViralPlayerProps {
   templateProps: ViralTemplateProps;
@@ -14,27 +14,20 @@ export const RemotionViralPlayer: React.FC<RemotionViralPlayerProps> = ({
   autoPlay = true,
   loop = true,
 }) => {
-  const playerRef = useRef<PlayerRef>(null);
-
   return (
     <div className="w-full h-full flex items-center justify-center bg-black overflow-hidden relative">
       <Player
-        ref={playerRef}
         component={ViralTemplate}
         inputProps={templateProps}
-        durationInFrames={templateProps.totalDurationInFrames || 900}
+        durationInFrames={Math.max(30, templateProps.totalDurationInFrames)}
         compositionWidth={1080}
         compositionHeight={1920}
         fps={30}
-        style={{
-          width: '100%',
-          height: '100%',
-          maxHeight: '100%',
-          objectFit: 'contain',
-        }}
-        controls={true}
+        style={{ width: '100%', height: '100%', maxHeight: '100%' }}
+        controls
         autoPlay={autoPlay}
         loop={loop}
+        acknowledgeRemotionLicense
       />
     </div>
   );

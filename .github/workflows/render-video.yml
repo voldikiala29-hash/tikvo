@@ -1,0 +1,59 @@
+name: Render video
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: "Identifiant du job (UUID)"
+        required: true
+        type: string
+      api_url:
+        description: "URL du Worker tikvo-api"
+        required: true
+        type: string
+
+concurrency:
+  group: render-${{ inputs.job_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      JOB_ID: ${{ inputs.job_id }}
+      API_URL: ${{ inputs.api_url }}
+      RENDER_SECRET: ${{ secrets.RENDER_SECRET }}
+      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dépendances système (ffmpeg, Chromium pour Remotion)
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ffmpeg fonts-dejavu-core fonts-liberation
+
+      - name: Dépendances Python (voix off Edge TTS)
+        run: pip install --quiet edge-tts==7.0.2
+
+      - name: Dépendances Node
+        run: npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+
+      - name: Vérifie que le rendu peut démarrer
+        run: npm run pipeline:test
+
+      - name: Rendu de la vidéo
+        run: npm run pipeline:render
