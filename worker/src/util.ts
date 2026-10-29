@@ -3,16 +3,16 @@ const decoder = new TextDecoder();
 
 export const now = (): number => Date.now();
 
-export function toBase64Url(bytes: Uint8Array): string {
+export function toBase64Url(bytes: Uint8Array<ArrayBufferLike>): string {
   let bin = '';
   for (const b of bytes) bin += String.fromCharCode(b);
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-export function fromBase64Url(text: string): Uint8Array {
+export function fromBase64Url(text: string): Uint8Array<ArrayBuffer> {
   const padded = text.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (text.length % 4)) % 4);
   const bin = atob(padded);
-  const out = new Uint8Array(bin.length);
+  const out = new Uint8Array(new ArrayBuffer(bin.length));
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;
 }
@@ -64,8 +64,8 @@ export async function encryptText(secret: string, plain: string): Promise<string
 export async function decryptText(secret: string, packed: string): Promise<string> {
   const key = await aesKey(secret);
   const data = fromBase64Url(packed);
-  const iv = data.slice(0, 12);
-  const ct = data.slice(12);
+  const iv: Uint8Array<ArrayBuffer> = data.slice(0, 12);
+  const ct: Uint8Array<ArrayBuffer> = data.slice(12);
   const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
   return decoder.decode(plain);
 }

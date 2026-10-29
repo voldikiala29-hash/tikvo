@@ -1,4 +1,5 @@
 import { dispatchWorkflow } from './github';
+import type { TokenResponse } from './tiktok';
 import {
   asRecord,
   parseJobParams,
@@ -168,7 +169,7 @@ async function handleAuthCallback(request: Request, env: Env): Promise<Response>
   }
 
   const secret = requireRenderSecret(env);
-  let tokens;
+  let tokens: TokenResponse;
   try {
     tokens = await exchangeCode(env, code, `${url.origin}/auth/tiktok/callback`);
   } catch (err) {
