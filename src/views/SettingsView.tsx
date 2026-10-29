@@ -14,7 +14,7 @@ import {
   Cloud,
 } from 'lucide-react';
 import { NicheData } from '../types/tiktok';
-import { tikTokApiService } from '../services/tiktokApiService';
+import { backend } from '../services/backendApi';
 import { useFirebase } from '../contexts/FirebaseContext';
 
 interface SettingsViewProps {
@@ -47,8 +47,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setIsTestingApi(true);
     setApiTestResult(null);
     try {
-      const stats = await tikTokApiService.fetchCreatorStats();
-      setApiTestResult(`API TikTok vérifiée avec succès : Profil @${stats.displayName} accessible (${stats.followerCount.toLocaleString()} abonnés).`);
+      const me = await backend.me();
+      const followers = me.stats ? ` (${me.stats.followers.toLocaleString('fr-FR')} abonnés)` : '';
+      setApiTestResult(
+        `Connexion vérifiée : @${me.username || me.displayName}${followers}. Publication ${
+          me.canPublish ? 'autorisée' : 'non autorisée : reconnecte TikTok'
+        }.`,
+      );
     } catch (e: any) {
       setApiTestResult('Erreur de test API : ' + e.message);
     } finally {

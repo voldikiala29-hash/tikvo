@@ -9,7 +9,7 @@
     "start": "NODE_ENV=production tsx server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit",
+    "lint": "tsc --noEmit && tsc --noEmit -p pipeline/tsconfig.json",
     "pipeline:test": "node --test pipeline/test/*.test.ts",
     "pipeline:smoke": "tsx pipeline/smoke.ts",
     "pipeline:render": "tsx pipeline/render.ts",

@@ -27,7 +27,6 @@ export const RemotionViralPlayer: React.FC<RemotionViralPlayerProps> = ({
         controls
         autoPlay={autoPlay}
         loop={loop}
-        acknowledgeRemotionLicense
       />
     </div>
   );
