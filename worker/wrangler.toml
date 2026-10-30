@@ -15,6 +15,7 @@ database_id = "5785d247-0933-4772-8241-1c205e07022a"
 [vars]
 ENVIRONMENT = "production"
 FRONTEND_URL = "https://tikvo.store"
+TIKTOK_SCOPES = "user.info.basic"
 FRONTEND_URL_2 = "https://voldikiala29-hash.github.io/tikvo"
 ALLOWED_ORIGINS = "https://tikvo.store,https://www.tikvo.store,https://voldikiala29-hash.github.io"
 
