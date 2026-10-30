@@ -148,7 +148,6 @@ function tiktokRedirectUri(env: Env): string {
 async function handleAuthStart(request: Request, env: Env): Promise<Response> {
   requireTikTokConfig(env);
   requireRenderSecret(env);
-  const url = new URL(request.url);
   const state = randomToken(16);
   await env.DB.prepare('INSERT INTO oauth_states (state, created_at) VALUES (?, ?)').bind(state, now()).run();
   return redirect(authorizeUrl(env, tiktokRedirectUri(env), state));
