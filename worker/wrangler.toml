@@ -24,6 +24,6 @@ crons = ["*/5 * * * *"]
 
 [[d1_databases]]
 binding = "DB"
-database_name = "tikvo"
+database_name = "tikvo_db"
 database_id = "5785d247-0933-4772-8241-1c205e07022a"
 migrations_dir = "migrations"
