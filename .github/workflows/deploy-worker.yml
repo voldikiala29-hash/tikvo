@@ -5,7 +5,7 @@ on:
     branches: [ "main" ]
     paths:
       - "worker/**"
-      - ".【entity-github¦canonical_name=GitHub】/workflows/deploy-worker.yml"
+      - ".github/workflows/deploy-worker.yml"
   workflow_dispatch:
 
 jobs:
@@ -18,7 +18,7 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install root deps
+      - name: Install deps
         run: npm install --legacy-peer-deps
 
       - name: Install worker deps
@@ -30,5 +30,4 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: worker
-        run: |
-          npx -y wrangler deploy --compatibility-date=2024-10-01
+        run: npx -y wrangler deploy
