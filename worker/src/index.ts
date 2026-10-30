@@ -138,13 +138,20 @@ async function getJobById(env: Env, id: string): Promise<JobRow> {
 
 // ---------------------------------------------------------------- authentification TikTok
 
+// Le redirect_uri OAuth doit être sur un domaine vérifié chez TikTok (tikvo.store).
+// La page /callback du site transmet code+state au Worker (voir public/callback.html).
+// Doit être identique à l'aller (authorize) et au retour (token exchange).
+function tiktokRedirectUri(env: Env): string {
+  return `${frontBase(env)}/callback`;
+}
+
 async function handleAuthStart(request: Request, env: Env): Promise<Response> {
   requireTikTokConfig(env);
   requireRenderSecret(env);
   const url = new URL(request.url);
   const state = randomToken(16);
   await env.DB.prepare('INSERT INTO oauth_states (state, created_at) VALUES (?, ?)').bind(state, now()).run();
-  return redirect(authorizeUrl(env, `${url.origin}/auth/tiktok/callback`, state));
+  return redirect(authorizeUrl(env, tiktokRedirectUri(env), state));
 }
 
 async function handleAuthCallback(request: Request, env: Env): Promise<Response> {
@@ -171,7 +178,7 @@ async function handleAuthCallback(request: Request, env: Env): Promise<Response>
   const secret = requireRenderSecret(env);
   let tokens: TokenResponse;
   try {
-    tokens = await exchangeCode(env, code, `${url.origin}/auth/tiktok/callback`);
+    tokens = await exchangeCode(env, code, tiktokRedirectUri(env));
   } catch (err) {
     return fail(err instanceof HttpError ? err.message : "Échec de l'échange avec TikTok.");
   }
