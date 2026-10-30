@@ -1,4 +1,3 @@
-
 name: Deploy tikvo to Pages
 on:
   push:
@@ -22,12 +21,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Clean npm cache
-        run: npm cache clean --force
-      - name: Install deps
-        run: npm install --legacy-peer-deps
-      - name: Build tikvo
-        run: npm run build
+      - run: npm install --legacy-peer-deps
+      - run: npm run build
         env:
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
@@ -36,8 +31,9 @@ jobs:
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_API_URL: ${{ vars.API_URL }}
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+          VITE_WORKER_URL: ${{ vars.API_URL }}
+          VITE_TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
+      - uses: actions/upload-pages-artifact@v3
         with:
           path: ./dist
   deploy:
@@ -49,4 +45,3 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
-
