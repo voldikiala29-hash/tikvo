@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Connexion TikTok</title>
+  </head>
+  <body>
+    <p>Connexion en cours...</p>
+    <script>
+      (function () {
+        var worker = 'https://tikvo-worker.voldikiala6.workers.dev/auth/tiktok/callback';
+        var q = window.location.search;
+        if (!q || (q.indexOf('code=') === -1 && q.indexOf('error=') === -1)) {
+          document.body.textContent = 'Réponse TikTok incomplète. Recommence la connexion depuis tikvo.store.';
+          return;
+        }
+        window.location.replace(worker + q);
+      })();
+    </script>
+  </body>
+</html>
