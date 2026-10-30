@@ -1,29 +1,22 @@
-name = "tikvo-api"
+name = "tikvo-worker"
 main = "src/index.ts"
-compatibility_date = "2025-09-01"
-workers_dev = true
+compatibility_date = "2024-10-01"
 
-# Variables non secrètes (modifiables). Les secrets (clés TikTok, token GitHub...)
-# sont poussés par le workflow "Deploy Worker" depuis les secrets GitHub.
-[vars]
-FRONTEND_URL = "https://tikvo.store"
-GITHUB_REPO = "voldikiala29-hash/tikvo"
-GITHUB_REF = "main"
-# Scopes demandés à TikTok. Ils doivent tous être activés dans ton app TikTok.
-# Pour afficher abonnés/likes, ajoute user.info.profile,user.info.stats (voir SETUP.md).
-TIKTOK_SCOPES = "user.info.basic,video.publish"
-# Autres origines autorisées à appeler l'API (séparées par des virgules), ex. pour tester en local.
-EXTRA_ORIGINS = ""
-# Comptes TikTok supplémentaires autorisés (open_id séparés par des virgules).
-# Par défaut, seul le premier compte connecté est autorisé.
-ALLOWED_OPEN_IDS = ""
-
-# Planificateur : publie les vidéos programmées et nettoie les jobs bloqués.
-[triggers]
-crons = ["*/5 * * * *"]
+# Base D1 - ID vérifié
+# Account: 2b365d4dcd971fb7ac5f8d8c15ce770b
+# Database: 5785d247-0933-4772-8241-1c205e07022a
+# Nom réel: tikvo_db
 
 [[d1_databases]]
 binding = "DB"
-database_name = "tikvo"
+database_name = "tikvo_db"
 database_id = "5785d247-0933-4772-8241-1c205e07022a"
-migrations_dir = "migrations"
+
+[vars]
+ENVIRONMENT = "production"
+FRONTEND_URL = "https://tikvo.store"
+FRONTEND_URL_2 = "https://voldikiala29-hash.github.io/tikvo"
+ALLOWED_ORIGINS = "https://tikvo.store,https://www.tikvo.store,https://voldikiala29-hash.github.io"
+
+[observability]
+enabled = true
