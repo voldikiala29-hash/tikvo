@@ -561,6 +561,9 @@ async function handleHealth(request: Request, env: Env): Promise<Response> {
       pexels: Boolean(env.PEXELS_API_KEY),
     },
     scopes: (env.TIKTOK_SCOPES || '').split(',').filter(Boolean),
+    // Diagnostic : 6 premiers caractères de la client key en service (la client key est publique, elle figure dans l'URL d'autorisation).
+    tiktokClientKeyHint: env.TIKTOK_CLIENT_KEY ? env.TIKTOK_CLIENT_KEY.slice(0, 6) : null,
+    redirectUri: tiktokRedirectUri(env),
   });
 }
 
