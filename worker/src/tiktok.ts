@@ -54,7 +54,7 @@ export function authorizeUrl(env: Env, redirectUri: string, state: string): stri
   const { clientKey } = requireTikTokConfig(env);
   const params = new URLSearchParams({
     client_key: clientKey,
-    scope: env.TIKTOK_SCOPES || 'user.info.basic,video.publish',
+    scope: env.TIKTOK_SCOPES || 'user.info.basic',
     response_type: 'code',
     redirect_uri: redirectUri,
     state,
