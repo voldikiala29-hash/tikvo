@@ -9,7 +9,8 @@ export interface ScriptItem {
   pexelsQuery: string;
 }
 
-export const ALLOWED_DURATIONS = [21, 42, 90] as const;
+// 3 = scripts d'une journée ; 21, 42, 90 = programmes complets (anciens).
+export const ALLOWED_DURATIONS = [3, 21, 42, 90] as const;
 
 const clean = (value: unknown): string =>
   typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';

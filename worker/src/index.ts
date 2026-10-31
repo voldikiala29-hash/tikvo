@@ -3,7 +3,7 @@ import { requireFirebaseUser, searchStockVideos } from './pexels';
 import { createRender, getRender, listDayRenders, parseRenderInput } from './renders';
 import { callModel, generateNicheScripts, rewriteScript, AI_MODEL } from './scripts';
 import { fetchPublicMetadata, parseSourceUrl } from './inspiration';
-import { cleanScriptText } from './scriptParse';
+import { cleanScriptText, ScriptItem } from './scriptParse';
 import { resolveRenderSettings } from './renderSettings';
 import { parseScriptRequest } from './scriptParse';
 import {
@@ -232,7 +232,11 @@ async function handleGenerateScripts(request: Request, env: Env): Promise<Respon
     throw new HttpError(400, 'invalid_param', err instanceof Error ? err.message : 'Requête invalide.');
   }
   const perNiche = Math.ceil(parsed.duration / parsed.niches.length);
-  const lists = await Promise.all(parsed.niches.map((n) => generateNicheScripts(env, n, perNiche, brief)));
+  // Une niche après l'autre : jamais de rafale d'appels, pour rester dans le quota.
+  const lists: ScriptItem[][] = [];
+  for (const niche of parsed.niches) {
+    lists.push(await generateNicheScripts(env, niche, perNiche, brief));
+  }
   const scripts = Object.fromEntries(parsed.niches.map((n, i) => [n, lists[i]]));
   return respond(request, env, { scripts, requested: parsed.duration, model: AI_MODEL });
 }
