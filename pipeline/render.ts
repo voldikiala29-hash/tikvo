@@ -5,6 +5,11 @@ import path from 'node:path';
 import { composeProps, MAX_VIDEO_SECONDS, TAIL_SECONDS, resolveBranding } from './compose.ts';
 import { ProgressReporter, WorkerApi, probe, requireEnv, run } from './lib.ts';
 import { buildQueries, collectClips, downloadTo } from './stock.ts';
+import type { ClipCandidate } from './stock.ts';
+import { findSceneClips } from './sceneClips.ts';
+import { mergeDropped, sceneWindows, splitScenes } from './scenes.ts';
+import type { SceneClip, SceneWindow } from './scenes.ts';
+import { FPS, wordsFromBoundaries } from '../src/video-engine/timeline.ts';
 import { renderViral } from './renderer.ts';
 import { synthesizeVoice } from './tts.ts';
 import { resolveVoice, voiceLabel } from '../src/video-engine/voices.ts';
@@ -59,6 +64,29 @@ async function pruneOldAssets(): Promise<void> {
 }
 
 /** Traite les éléments par lots de `limit` en parallèle. */
+/** Télécharge les plans (dans l'ordre, 4 à la fois). Un plan qui échoue donne null. */
+async function downloadClips(items: (ClipCandidate | null)[], publicDir: string, reporter: ProgressReporter): Promise<(SceneClip | null)[]> {
+  const total = items.filter((c) => c !== null).length;
+  let done = 0;
+  return mapLimit(items, DOWNLOAD_PARALLEL, async (candidate, i) => {
+    if (!candidate) return null;
+    const rel = `clips/clip-${i + 1}.mp4`;
+    const dest = path.join(publicDir, rel);
+    try {
+      await downloadTo(candidate.link, dest);
+      const info = await probe(dest);
+      if (info.duration < 1) throw new Error('clip trop court');
+      return { id: `pixabay-${candidate.id}`, src: rel, durationSec: info.duration, credit: candidate.credit };
+    } catch (err) {
+      console.warn(`Clip ${candidate.id} ignoré : ${err instanceof Error ? err.message : err}`);
+      return null;
+    } finally {
+      done++;
+      await reporter.report(`Téléchargement des plans (${done}/${total})…`, 15 + Math.round((done / Math.max(1, total)) * 20));
+    }
+  });
+}
+
 async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length);
   let next = 0;
@@ -115,41 +143,51 @@ async function main(): Promise<void> {
 
   lap('voix off');
 
-  // 2. Plans : nombre choisi par l'utilisateur, ou automatique selon la durée.
-  const need = clipCountFor(totalSec, settings.clipsPerScript);
-  await reporter.report(`Recherche de ${need} plans Pixabay…`, 15, true);
+  // 2. Plans. Priorité au script : une recherche par phrase, pour que l'image suive ce qui est dit.
   const pixabayKey = requireEnv('PEXELS_API_KEY'); // nom du secret conservé pendant la transition
-  const candidates = await collectClips({
-    need,
-    ids: params.pexelsIds || [],
-    queries: buildQueries(params.niche.id, params.keywords || []),
-    key: pixabayKey,
-    seed: params.variant ?? 0,
-  });
-  if (candidates.length < Math.min(MIN_CLIPS, need)) {
-    throw new Error(`Pixabay n'a trouvé que ${candidates.length} clip(s) vertical(aux) pour ces mots-clés.`);
-  }
-
-  // Téléchargements en parallèle (4 à la fois).
-  let downloaded = 0;
-  const results = await mapLimit(candidates, DOWNLOAD_PARALLEL, async (candidate, i) => {
-    const rel = `clips/clip-${i + 1}.mp4`;
-    const dest = path.join(publicDir, rel);
-    try {
-      await downloadTo(candidate.link, dest);
-      const info = await probe(dest);
-      if (info.duration < 1) throw new Error('clip trop court');
-      return { id: `pixabay-${candidate.id}`, src: rel, durationSec: info.duration, credit: candidate.credit };
-    } catch (err) {
-      console.warn(`Clip ${candidate.id} ignoré : ${err instanceof Error ? err.message : err}`);
+  const lines = splitScenes(params.script);
+  const queries = await api
+    .briefs(lines, params.niche.id)
+    .then((r) => r.queries)
+    .catch((err: unknown) => {
+      console.warn('Plans par phrase indisponibles, recherche par niche :', err instanceof Error ? err.message : err);
       return null;
-    } finally {
-      downloaded++;
-      await reporter.report(`Téléchargement des plans (${downloaded}/${candidates.length})…`, 15 + Math.round((downloaded / candidates.length) * 20));
+    });
+
+  let clips: SceneClip[];
+  let scenes: SceneWindow[] | undefined;
+  if (queries && queries.some((q) => q !== null)) {
+    await reporter.report(`Recherche d'un plan par phrase (${lines.length})…`, 15, true);
+    const found = await findSceneClips({
+      queries,
+      key: pixabayKey,
+      seed: params.variant ?? 0,
+      fallbackQueries: buildQueries(params.niche.id, params.keywords || []),
+    });
+    lap('recherche des plans');
+    const got = await downloadClips(found, publicDir, reporter);
+    clips = got.filter((c): c is SceneClip => c !== null);
+    if (clips.length < MIN_CLIPS) throw new Error(`Moins de ${MIN_CLIPS} plans exploitables après téléchargement.`);
+    const timing = wordsFromBoundaries(voice.events, params.script, voice.audioSec);
+    scenes = mergeDropped(sceneWindows(lines, timing, Math.ceil(totalSec * FPS)), got.map((c) => c !== null)).windows;
+  } else {
+    // Repli : recherche générique par niche, nombre de plans selon la durée.
+    const need = clipCountFor(totalSec, settings.clipsPerScript);
+    await reporter.report(`Recherche de ${need} plans Pixabay…`, 15, true);
+    const candidates = await collectClips({
+      need,
+      ids: params.pexelsIds || [],
+      queries: buildQueries(params.niche.id, params.keywords || []),
+      key: pixabayKey,
+      seed: params.variant ?? 0,
+    });
+    if (candidates.length < Math.min(MIN_CLIPS, need)) {
+      throw new Error(`Pixabay n'a trouvé que ${candidates.length} clip(s) vertical(aux) pour ces mots-clés.`);
     }
-  });
-  const clips = results.filter((c): c is NonNullable<typeof c> => c !== null);
-  if (clips.length < Math.min(MIN_CLIPS, need)) throw new Error(`Moins de ${MIN_CLIPS} plans exploitables après téléchargement.`);
+    const got = await downloadClips(candidates, publicDir, reporter);
+    clips = got.filter((c): c is SceneClip => c !== null);
+    if (clips.length < Math.min(MIN_CLIPS, need)) throw new Error(`Moins de ${MIN_CLIPS} plans exploitables après téléchargement.`);
+  }
 
   // 3. Montage aux dimensions et avec le style choisis.
   const props = composeProps({
@@ -160,6 +198,7 @@ async function main(): Promise<void> {
     audioSec: voice.audioSec,
     audioSrc: 'audio/voice.mp3',
     clips,
+    scenes,
     branding: resolveBranding(params.branding),
     settings,
   });

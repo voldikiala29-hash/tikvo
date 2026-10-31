@@ -36,6 +36,8 @@ export type ViralTemplateProps = {
   showNiche?: boolean;
   /** Barre de progression en bas (vraie par défaut). */
   showProgress?: boolean;
+  /** Une fenêtre par plan (une par phrase). Absent = plans répartis sur la durée. */
+  scenes?: { from: number; durationInFrames: number }[];
 };
 
 export interface VideoGenerationRequest {

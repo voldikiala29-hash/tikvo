@@ -16,6 +16,7 @@ export interface PixabayVariant {
 
 export interface PixabayHit {
   id: number;
+  tags?: string;
   duration?: number;
   user?: string;
   videos?: Partial<Record<'large' | 'medium' | 'small' | 'tiny', PixabayVariant>>;
@@ -31,6 +32,22 @@ export interface ClipCandidate {
 }
 
 export { buildQueries } from '../src/video-engine/queries.ts';
+
+/** Résultats Pixabay pour une requête (vertical, populaires). */
+export async function searchPixabay(query: string, key: string, page = 1): Promise<PixabayHit[]> {
+  const url = `https://pixabay.com/api/videos/?${new URLSearchParams({
+    key,
+    safesearch: 'true',
+    q: query.slice(0, 100),
+    video_type: 'film',
+    orientation: 'vertical',
+    per_page: '20',
+    order: 'popular',
+    page: String(page),
+  })}`;
+  const data = await pixabayGet<{ hits?: PixabayHit[] }>(url);
+  return data.hits ?? [];
+}
 
 const VARIANT_ORDER = ['large', 'medium', 'small', 'tiny'] as const;
 const MIN_CLIP_SECONDS = 3;

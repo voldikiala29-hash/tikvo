@@ -57,6 +57,7 @@ export const ViralTemplate: React.FC<ViralTemplateProps> = ({
   width = 1080,
   height = 1920,
   montage = FALLBACK_MONTAGE,
+  scenes,
 }) => {
   const frame = useCurrentFrame();
   const vertical = height >= width;
@@ -91,7 +92,7 @@ export const ViralTemplate: React.FC<ViralTemplateProps> = ({
   const progressPercent = Math.min(100, Math.max(0, (frame / Math.max(1, totalDurationInFrames)) * 100));
 
   // 4. Plans : fondu de transition (le plan suivant commence un peu plus tôt, il se superpose).
-  const segments = planSegments(totalDurationInFrames, clips.length || 1);
+  const segments = scenes && scenes.length === clips.length ? scenes : planSegments(totalDurationInFrames, clips.length || 1);
   const fade = montage.transitionFrames;
 
   return (

@@ -387,7 +387,7 @@ const DailyVideoCard: React.FC<DailyVideoCardProps> = ({
             <span className="text-[10px] text-gray-500">Vidéo {index + 1}/3</span>
           </div>
           <h3 className="text-sm font-bold text-white">{video.title}</h3>
-          <p className="text-[11px] text-gray-400">Clips : {video.pexelsQuery}</p>
+          <p className="text-[11px] text-gray-400">Plans : une image par phrase du script, selon ce qui est dit</p>
           <label className="flex items-center gap-2 text-[11px] text-gray-400">
             <span>Niche</span>
             <select

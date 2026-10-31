@@ -2,6 +2,7 @@ import { dispatchWorkflow } from './github';
 import { requireFirebaseUser, searchStockVideos } from './pexels';
 import { createRender, getRender, listDayRenders, parseRenderInput } from './renders';
 import { callModel, generateNicheScripts, rewriteScript, AI_MODEL } from './scripts';
+import { BRIEF_SYSTEM, buildBriefPrompt, parseBriefQueries } from './briefs';
 import { fetchPublicMetadata, parseSourceUrl } from './inspiration';
 import { cleanScriptText, ScriptItem } from './scriptParse';
 import { resolveRenderSettings } from './renderSettings';
@@ -129,6 +130,27 @@ interface PexelsVideo {
   height: number;
   user?: { name?: string; url?: string };
   video_files?: PexelsFile[];
+}
+
+/** Une requête de recherche de plan par phrase du script (appelé par le pipeline de rendu). */
+async function handleInternalBriefs(request: Request, env: Env): Promise<Response> {
+  await requireInternal(request, env);
+  const body = await readJson(request);
+  const lines = (Array.isArray(body.lines) ? body.lines : [])
+    .filter((l): l is string => typeof l === 'string')
+    .map((l) => l.slice(0, 300))
+    .slice(0, 8);
+  if (lines.length === 0) throw new HttpError(400, 'invalid_param', 'Aucune phrase à illustrer.');
+  const niche = typeof body.niche === 'string' && /^[a-z]{2,20}$/.test(body.niche) ? body.niche : 'general';
+  let queries: (string | null)[];
+  try {
+    const raw = await callModel(env, buildBriefPrompt(lines, niche), 300 + lines.length * 40, BRIEF_SYSTEM);
+    queries = parseBriefQueries(raw, lines.length);
+  } catch (err) {
+    console.warn('Plans par phrase indisponibles :', err instanceof Error ? err.message : err);
+    queries = lines.map(() => null);
+  }
+  return respond(request, env, { queries });
 }
 
 async function handleInternalGetJob(request: Request, env: Env, id: string): Promise<Response> {
@@ -463,6 +485,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === '/api/settings' && method === 'PUT') return handlePutSettings(request, env);
   if (path === '/api/script-overrides' && method === 'GET') return handleGetOverrides(request, env);
   if (path === '/api/script-override' && method === 'PUT') return handlePutOverride(request, env);
+  if (path === '/internal/briefs' && method === 'POST') return handleInternalBriefs(request, env);
   if (method === 'GET' && path === '/api/jobs') return handleRendersList(request, env);
   const jobMatch = path.match(/^\/api\/jobs\/([0-9a-f-]{36})$/);
   if (jobMatch && method === 'GET') return handleRenderGet(request, env, jobMatch[1]);

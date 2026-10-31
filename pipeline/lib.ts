@@ -162,6 +162,11 @@ export class WorkerApi {
     return this.request<JobData>('GET', `/internal/jobs/${id}`);
   }
 
+  /** Une requête de recherche par phrase (null = pas de requête pour cette phrase). */
+  briefs(lines: string[], niche: string): Promise<{ queries: (string | null)[] }> {
+    return this.request<{ queries: (string | null)[] }>('POST', '/internal/briefs', { lines, niche });
+  }
+
   patchJob(id: string, patch: JobPatch): Promise<unknown> {
     return this.request('POST', `/internal/jobs/${id}`, patch);
   }
