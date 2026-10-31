@@ -1,5 +1,6 @@
 import { HttpError, Env } from './types';
 import { ScriptItem, cleanScriptText, parseScriptsJson } from './scriptParse';
+import { callProvider, providerChain } from './llm';
 
 // Débit de parole moyen (mots par seconde), aligné sur src/video-engine/montage.ts.
 const WORDS_PER_SECOND = 2.8;
@@ -30,7 +31,22 @@ export function buildPrompt(niche: string, count: number, avoid: string[], brief
 }
 
 export async function callModel(env: Env, prompt: string, maxTokens = 2500, system = SYSTEM): Promise<string> {
-  if (!env.AI) throw new HttpError(503, 'ai_unavailable', 'Workers AI non configuré.');
+  const messages = [
+    { role: 'system' as const, content: system },
+    { role: 'user' as const, content: prompt },
+  ];
+  // 1. Fournisseurs gratuits configurés, un par un. Un quota atteint ou une panne passe au suivant.
+  for (const provider of providerChain(env)) {
+    try {
+      const text = await callProvider(provider, messages, maxTokens, 25_000);
+      console.log(`[ai] réponse de ${provider.name}`);
+      return text;
+    } catch (err) {
+      console.warn(`[ai] ${provider.name} indisponible, essai suivant :`, err instanceof Error ? err.message : err);
+    }
+  }
+  // 2. Workers AI, dernier recours.
+  if (!env.AI) throw new HttpError(503, 'ai_unavailable', 'Aucun modèle IA disponible.');
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new HttpError(504, 'ai_timeout', 'Le modèle met trop de temps à répondre. Réessaie dans un instant.')), CALL_TIMEOUT_MS);
