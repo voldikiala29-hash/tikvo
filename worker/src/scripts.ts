@@ -33,7 +33,7 @@ export async function callModel(env: Env, prompt: string, maxTokens = 2500, syst
   if (!env.AI) throw new HttpError(503, 'ai_unavailable', 'Workers AI non configuré.');
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error('délai dépassé')), CALL_TIMEOUT_MS);
+    timer = setTimeout(() => reject(new HttpError(504, 'ai_timeout', 'Le modèle met trop de temps à répondre. Réessaie dans un instant.')), CALL_TIMEOUT_MS);
   });
   try {
     const out = (await Promise.race([
@@ -47,6 +47,12 @@ export async function callModel(env: Env, prompt: string, maxTokens = 2500, syst
       timeout,
     ])) as { response?: string } | string;
     return typeof out === 'string' ? out : (out?.response ?? '');
+  } catch (err) {
+    if (err instanceof HttpError) throw err;
+    // Erreur Workers AI (quota quotidien, modèle indisponible…) : message lisible, cause dans les logs.
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[ai] appel Workers AI échoué', { model: AI_MODEL, message });
+    throw new HttpError(503, 'ai_error', 'Le modèle IA est indisponible (quota du jour atteint ou erreur temporaire). Réessaie plus tard.');
   } finally {
     if (timer) clearTimeout(timer);
   }
