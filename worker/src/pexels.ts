@@ -1,4 +1,5 @@
-// Vérification du jeton Firebase et proxy Pexels (clé API jamais exposée au navigateur).
+// Vérification du jeton Firebase et recherche de clips vidéo (fournisseur : Pixabay).
+// La clé API reste dans le Worker : le navigateur ne reçoit que les URL des clips.
 import { Env, HttpError } from './types';
 
 export interface AuthUser {
@@ -7,7 +8,7 @@ export interface AuthUser {
 
 /**
  * Vérifie un jeton Firebase ID via l'endpoint officiel Identity Toolkit (accounts:lookup).
- * Google valide la signature, l'expiration et l'émetteur : pas de crypto maison à maintenir.
+ * Google valide la signature, l'expiration et l'émetteur.
  */
 export async function requireFirebaseUser(request: Request, env: Env): Promise<AuthUser> {
   const header = request.headers.get('Authorization') || '';
@@ -36,66 +37,88 @@ export async function requireFirebaseUser(request: Request, env: Env): Promise<A
   return { uid };
 }
 
-interface PexelsFile {
-  file_type?: string;
-  width?: number | null;
-  height?: number | null;
-  link: string;
+interface PixabayVariant {
+  url?: string;
+  width?: number;
+  height?: number;
+  thumbnail?: string;
+  duration?: number;
 }
 
-interface PexelsVideo {
+interface PixabayHit {
   id: number;
-  image: string;
-  duration: number;
-  video_files?: PexelsFile[];
+  tags?: string;
+  duration?: number;
+  videos?: {
+    large?: PixabayVariant;
+    medium?: PixabayVariant;
+    small?: PixabayVariant;
+    tiny?: PixabayVariant;
+  };
 }
 
-/** Fichier MP4 vertical, de largeur proche de 720 px : assez net pour un aperçu, léger à charger. */
-function pickPortraitMp4(files: PexelsFile[] = []): PexelsFile | null {
-  const mp4 = files.filter((f) => f.file_type === 'video/mp4' && Boolean(f.link));
-  const portrait = mp4.filter((f) => (f.height ?? 0) >= (f.width ?? 0));
-  const pool = portrait.length > 0 ? portrait : mp4;
-  if (pool.length === 0) return null;
-  return [...pool].sort((a, b) => Math.abs((a.width ?? 0) - 720) - Math.abs((b.width ?? 0) - 720))[0];
-}
-
-export interface PexelsClip {
+export interface StockClip {
   id: number;
   url: string;
   preview: string;
   duration: number;
   width: number | null;
   height: number | null;
+  tags: string;
 }
 
-export async function searchPexelsVideos(env: Env, query: string, perPage: number): Promise<PexelsClip[]> {
-  if (!env.PEXELS_API_KEY) throw new HttpError(503, 'not_configured', 'PEXELS_API_KEY manquant côté serveur.');
+/** Meilleure qualité disponible pour un clip Pixabay. */
+function pickVariant(hit: PixabayHit): PixabayVariant | null {
+  const v = hit.videos ?? {};
+  return [v.large, v.medium, v.small, v.tiny].find((c) => Boolean(c?.url)) ?? null;
+}
 
+export async function searchStockVideos(env: Env, query: string, perPage: number): Promise<StockClip[]> {
+  // Transition : PIXABAY_API_KEY si présente, sinon le secret historique PEXELS_API_KEY (qui contient la clé Pixabay).
+  const apiKey = env.PIXABAY_API_KEY || env.PEXELS_API_KEY;
+  if (!apiKey) throw new HttpError(503, 'not_configured', 'Clé API vidéo manquante côté serveur.');
+
+  // Pixabay refuse une per_page inférieure à 3 et une requête de plus de 100 caractères.
+  const q = query.slice(0, 100);
+  const count = Math.max(3, Math.min(200, perPage));
   const url =
-    `https://api.pexels.com/videos/search?query=${encodeURIComponent(query)}` +
-    `&per_page=${perPage}&orientation=portrait`;
+    `https://pixabay.com/api/videos/?key=${encodeURIComponent(apiKey)}` +
+    `&q=${encodeURIComponent(q)}&per_page=${count}&safesearch=true`;
 
   let res: Response;
   try {
-    res = await fetch(url, { headers: { Authorization: env.PEXELS_API_KEY } });
+    res = await fetch(url);
   } catch {
-    throw new HttpError(502, 'upstream', 'Pexels est injoignable.');
+    throw new HttpError(502, 'upstream', 'Pixabay est injoignable.');
   }
-  if (!res.ok) throw new HttpError(502, 'upstream', `Pexels a répondu ${res.status}.`);
 
-  const data = (await res.json().catch(() => ({}))) as { videos?: PexelsVideo[] };
-  const clips: PexelsClip[] = [];
-  for (const video of data.videos ?? []) {
-    const file = pickPortraitMp4(video.video_files);
-    if (!file) continue;
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    // Le message d'erreur Pixabay ne contient jamais la clé : on peut le lire sans risque.
+    if (res.status === 401 || res.status === 403 || (res.status === 400 && /key/i.test(body))) {
+      console.error('Pixabay a refusé la clé API (statut', res.status, ')');
+      throw new HttpError(502, 'PIXABAY_401', 'Clé Pixabay invalide');
+    }
+    throw new HttpError(502, 'upstream', `Pixabay a répondu ${res.status}.`);
+  }
+
+  const data = (await res.json().catch(() => ({}))) as { hits?: PixabayHit[] };
+  const clips: StockClip[] = [];
+  for (const hit of data.hits ?? []) {
+    const variant = pickVariant(hit);
+    if (!variant?.url) continue;
     clips.push({
-      id: video.id,
-      url: file.link,
-      preview: video.image,
-      duration: video.duration,
-      width: file.width ?? null,
-      height: file.height ?? null,
+      id: hit.id,
+      url: variant.url,
+      preview: variant.thumbnail ?? '',
+      duration: hit.duration ?? variant.duration ?? 0,
+      width: variant.width ?? null,
+      height: variant.height ?? null,
+      tags: hit.tags ?? '',
     });
   }
+
+  // Les clips verticaux d'abord : l'écran Aujourd'hui affiche des cartes en portrait.
+  clips.sort((a, b) => Number((b.height ?? 0) >= (b.width ?? 0)) - Number((a.height ?? 0) >= (a.width ?? 0)));
   return clips;
 }
