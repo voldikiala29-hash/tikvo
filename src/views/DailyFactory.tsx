@@ -24,6 +24,7 @@ import {
   MONTAGES,
   RenderSettings,
   estimateSeconds,
+  resolveRenderSettings,
 } from '../video-engine/montage';
 
 interface DailyFactoryProps {
@@ -33,6 +34,25 @@ interface DailyFactoryProps {
 }
 
 const POLL_MS = 5000;
+const STYLE_STORAGE_KEY = 'tikvo.renderSettings.v1';
+
+/** Dernier choix de format et de style, mémorisé sur cet appareil (affichage immédiat). */
+function readLocalSettings(): RenderSettings | null {
+  try {
+    const raw = window.localStorage.getItem(STYLE_STORAGE_KEY);
+    return raw ? resolveRenderSettings(JSON.parse(raw)) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeLocalSettings(settings: RenderSettings): void {
+  try {
+    window.localStorage.setItem(STYLE_STORAGE_KEY, JSON.stringify(settings));
+  } catch {
+    /* stockage indisponible (navigation privée, quota) : le choix reste en mémoire et côté serveur */
+  }
+}
 const REWRITE_TARGETS = [15, 30, 60] as const;
 const RATIO: Record<string, string> = { '9:16': '9 / 16', '16:9': '16 / 9', '1:1': '1 / 1', '4:5': '4 / 5' };
 
@@ -64,7 +84,7 @@ const Chip: React.FC<{ active: boolean; onClick: () => void; title?: string; chi
 const SettingsPanel: React.FC<{ settings: RenderSettings; onChange: (next: RenderSettings) => void }> = ({ settings, onChange }) => {
   const montage = MONTAGES.find((m) => m.id === settings.montage) ?? MONTAGES[0];
   return (
-    <section className="rounded-2xl bg-[#12121A] border border-white/5 p-4 space-y-4">
+    <section className="rounded-2xl bg-[#12121A] border border-white/5 p-4 space-y-4" aria-label="Réglages du rendu">
       <div className="space-y-2">
         <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Format</p>
         <div className="flex flex-wrap gap-1.5">
@@ -84,7 +104,7 @@ const SettingsPanel: React.FC<{ settings: RenderSettings; onChange: (next: Rende
             </Chip>
           ))}
         </div>
-        <p className="text-[11px] text-gray-500">{montage.description}</p>
+        <p className="text-[11px] text-[#00FFC6]/80">{montage.label} : {montage.description}</p>
       </div>
       <div className="space-y-2">
         <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Plans vidéo par script</p>
@@ -361,6 +381,9 @@ const DailyVideoCard: React.FC<DailyVideoCardProps> = ({
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <CopyScriptButton video={{ ...video, script }} />
           </div>
+          <p className="text-[10px] text-gray-500">
+            Style : {MONTAGES.find((m) => m.id === settings.montage)?.label ?? settings.montage} · format {settings.aspect}
+          </p>
         </div>
       </div>
     </article>
@@ -373,7 +396,7 @@ export const DailyFactory: React.FC<DailyFactoryProps> = ({ uid, profile, onView
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [renders, setRenders] = useState<RenderJob[]>([]);
-  const [settings, setSettings] = useState<RenderSettings>(DEFAULT_RENDER_SETTINGS);
+  const [settings, setSettings] = useState<RenderSettings>(() => readLocalSettings() ?? DEFAULT_RENDER_SETTINGS);
   const [overrides, setOverrides] = useState<Record<string, string>>({});
 
   const today = toLocalISODate(new Date());
@@ -405,7 +428,12 @@ export const DailyFactory: React.FC<DailyFactoryProps> = ({ uid, profile, onView
   useEffect(() => {
     let cancelled = false;
     getRenderSettings()
-      .then((s) => !cancelled && setSettings(s))
+      .then(({ settings: remote, saved }) => {
+        // Réglages enregistrés sur le serveur : ils priment. Sinon on garde le choix local.
+        if (cancelled || !saved) return;
+        setSettings(remote);
+        writeLocalSettings(remote);
+      })
       .catch(() => undefined);
     getScriptOverrides()
       .then((o) => !cancelled && setOverrides(o))
@@ -420,6 +448,7 @@ export const DailyFactory: React.FC<DailyFactoryProps> = ({ uid, profile, onView
 
   const changeSettings = (next: RenderSettings) => {
     setSettings(next);
+    writeLocalSettings(next);
     saveRenderSettings(next).catch((err: unknown) => setError(errorText(err, 'Réglages non enregistrés.')));
   };
 
