@@ -12,7 +12,7 @@ const CALL_TIMEOUT_MS = 30_000;
 const SYSTEM =
   'Tu es un scénariste expert des vidéos TikTok virales. Tu réponds uniquement avec un tableau JSON valide, sans texte autour.';
 
-export function buildPrompt(niche: string, count: number, avoid: string[]): string {
+export function buildPrompt(niche: string, count: number, avoid: string[], brief?: string | null): string {
   const lines = [
     `Niche : ${niche}.`,
     `Génère ${count} scripts différents de vidéos courtes (15 secondes maximum) au format JSON :`,
@@ -24,11 +24,12 @@ export function buildPrompt(niche: string, count: number, avoid: string[]): stri
     '- pexelsQuery : 2 à 4 mots en anglais décrivant une vidéo d’illustration stock (exemple : "laptop typing code"), tous différents.',
     'Ton viral, en français, tutoiement.',
   ];
+  if (brief) lines.push(`Inspire-toi de ce style, tiré des sources choisies par l'utilisateur : ${brief}`);
   if (avoid.length > 0) lines.push(`Ne reprends aucun de ces hooks : ${avoid.slice(-20).join(' | ')}.`);
   return lines.join('\n');
 }
 
-async function callModel(env: Env, prompt: string, maxTokens = 2500, system = SYSTEM): Promise<string> {
+export async function callModel(env: Env, prompt: string, maxTokens = 2500, system = SYSTEM): Promise<string> {
   if (!env.AI) throw new HttpError(503, 'ai_unavailable', 'Workers AI non configuré.');
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
@@ -52,14 +53,14 @@ async function callModel(env: Env, prompt: string, maxTokens = 2500, system = SY
 }
 
 /** Scripts d'une niche, par lots successifs. Un lot en échec est ignoré : jamais de blocage. */
-export async function generateNicheScripts(env: Env, niche: string, count: number): Promise<ScriptItem[]> {
+export async function generateNicheScripts(env: Env, niche: string, count: number, brief?: string | null): Promise<ScriptItem[]> {
   const result: ScriptItem[] = [];
   const seen = new Set<string>();
   const maxCalls = Math.ceil(count / BATCH_SIZE) + 2;
   for (let call = 0; call < maxCalls && result.length < count; call++) {
     const want = Math.min(BATCH_SIZE, count - result.length);
     try {
-      const raw = await callModel(env, buildPrompt(niche, want, result.map((r) => r.hook)));
+      const raw = await callModel(env, buildPrompt(niche, want, result.map((r) => r.hook), brief));
       for (const item of parseScriptsJson(raw)) {
         const key = item.hook.toLowerCase();
         if (seen.has(key) || result.length >= count) continue;
@@ -79,7 +80,7 @@ export async function generateNicheScripts(env: Env, niche: string, count: numbe
  * Réécrit un script pour qu'il dure environ `targetSeconds` à la voix.
  * Erreur 422 si le résultat s'écarte trop de la cible : l'utilisateur relance plutôt que de recevoir n'importe quoi.
  */
-export async function rewriteScript(env: Env, script: string, targetSeconds: number): Promise<string> {
+export async function rewriteScript(env: Env, script: string, targetSeconds: number, brief?: string | null): Promise<string> {
   const current = script.trim().split(/\s+/).filter(Boolean).length;
   const target = Math.round(targetSeconds * WORDS_PER_SECOND);
   const prompt = [
@@ -87,6 +88,7 @@ export async function rewriteScript(env: Env, script: string, targetSeconds: num
     script.trim(),
     '',
     `Réécris-le pour qu’il dure environ ${targetSeconds} secondes à voix normale, soit environ ${target} mots (il en contient ${current} aujourd’hui).`,
+    ...(brief ? [`Inspire-toi de ce style, tiré des sources de l'utilisateur : ${brief}`] : []),
     'Garde le même sujet et une accroche forte en première ligne. Ton viral, direct, tutoiement. Phrases courtes, pas d’emoji, pas de hashtag, pas de titre.',
     'Réponds uniquement avec le texte du nouveau script, une idée par ligne.',
   ].join('\n');
