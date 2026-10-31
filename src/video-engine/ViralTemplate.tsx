@@ -59,7 +59,9 @@ export const ViralTemplate: React.FC<ViralTemplateProps> = ({
   audioSrc,
   totalDurationInFrames,
   hookFrames = 90,
-  brandTag = 'tikvo',
+  brandTag,
+  showNiche = true,
+  showProgress = true,
 }) => {
   const frame = useCurrentFrame();
 
@@ -143,7 +145,7 @@ export const ViralTemplate: React.FC<ViralTemplateProps> = ({
         }}
       />
 
-      {/* Marque */}
+      {brandTag ? (
       <div
         style={{
           position: 'absolute',
@@ -170,8 +172,10 @@ export const ViralTemplate: React.FC<ViralTemplateProps> = ({
         />
         <span style={{ color: '#FFFFFF', fontSize: 32, fontWeight: 900, letterSpacing: '1px' }}>{brandTag}</span>
       </div>
+      ) : null}
 
       {/* Badge niche */}
+      {showNiche ? (
       <div
         style={{
           position: 'absolute',
@@ -190,6 +194,7 @@ export const ViralTemplate: React.FC<ViralTemplateProps> = ({
       >
         # {nicheName}
       </div>
+      ) : null}
 
       {/* Hook */}
       {isHookActive && (
@@ -269,7 +274,7 @@ export const ViralTemplate: React.FC<ViralTemplateProps> = ({
         </div>
       )}
 
-      {/* Barre de progression */}
+      {showProgress ? (
       <div
         style={{
           position: 'absolute',
@@ -290,6 +295,7 @@ export const ViralTemplate: React.FC<ViralTemplateProps> = ({
           }}
         />
       </div>
+      ) : null}
     </div>
   );
 };

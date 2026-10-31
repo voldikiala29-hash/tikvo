@@ -12,7 +12,7 @@ import {
   searchPexels,
 } from '../services/backendApi';
 import { StoredProgram, UserProfile, loadProgram, saveGeneratedProgram } from '../services/factoryStore';
-import { NICHE_CATALOG, ProgramVideo, generateProgram, toLocalISODate } from '../services/programGenerator';
+import { NICHE_CATALOG, ProgramVideo, generateProgramWithAI, toLocalISODate } from '../services/programGenerator';
 
 interface DailyFactoryProps {
   uid: string;
@@ -331,7 +331,7 @@ export const DailyFactory: React.FC<DailyFactoryProps> = ({ uid, profile, onView
     try {
       const startDate = new Date();
       startDate.setHours(12, 0, 0, 0);
-      const generated = generateProgram(profile.niches, duration, startDate);
+      const generated = await generateProgramWithAI(profile.niches, duration, startDate);
       await saveGeneratedProgram(uid, { niches: profile.niches, duration, ...generated });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Impossible de démarrer le programme.');

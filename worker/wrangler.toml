@@ -24,3 +24,6 @@ ALLOWED_ORIGINS = "https://tikvo.store,https://www.tikvo.store,https://voldikial
 
 [observability]
 enabled = true
+
+[ai]
+binding = "AI"

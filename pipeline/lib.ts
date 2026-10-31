@@ -118,6 +118,7 @@ export interface JobData {
     voice?: string;
     pexelsIds?: number[];
     duration?: number;
+    branding?: unknown;
   };
   publish: {
     caption?: string;

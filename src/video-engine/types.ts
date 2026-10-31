@@ -25,7 +25,12 @@ export type ViralTemplateProps = {
   totalDurationInFrames: number;
   /** Durée d'affichage du gros hook, en frames (90 par défaut). */
   hookFrames?: number;
+  /** Nom affiché en haut à droite. Absent = rien d'affiché. */
   brandTag?: string;
+  /** Badge de niche en haut à gauche (vrai par défaut). */
+  showNiche?: boolean;
+  /** Barre de progression en bas (vraie par défaut). */
+  showProgress?: boolean;
 };
 
 export interface VideoGenerationRequest {

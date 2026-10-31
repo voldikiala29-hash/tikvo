@@ -2,7 +2,29 @@ import type { ViralTemplateProps } from '../src/video-engine/types.ts';
 import { FPS, hookFramesFor, wordsFromBoundaries } from '../src/video-engine/timeline.ts';
 import type { BoundaryEvent } from '../src/video-engine/timeline.ts';
 
+export interface Branding {
+  showBrand: boolean;
+  brandName: string;
+  showNiche: boolean;
+  showProgress: boolean;
+}
+
+/** Par défaut : pas de logo ni de nom, badge de niche et barre de progression conservés. */
+export const DEFAULT_BRANDING: Branding = { showBrand: false, brandName: 'tikvo', showNiche: true, showProgress: true };
+
+export function resolveBranding(raw: unknown): Branding {
+  const o = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const name = typeof o.brandName === 'string' && o.brandName.trim() ? o.brandName.trim().slice(0, 40) : DEFAULT_BRANDING.brandName;
+  return {
+    showBrand: typeof o.showBrand === 'boolean' ? o.showBrand : DEFAULT_BRANDING.showBrand,
+    brandName: name,
+    showNiche: typeof o.showNiche === 'boolean' ? o.showNiche : DEFAULT_BRANDING.showNiche,
+    showProgress: typeof o.showProgress === 'boolean' ? o.showProgress : DEFAULT_BRANDING.showProgress,
+  };
+}
+
 export interface ComposeInput {
+  branding?: Branding;
   /** Durée choisie par l'utilisateur (15, 30 ou 60 s) : la vidéo dure au moins cette durée. */
   targetSec?: number;
   hook: string;
@@ -23,6 +45,7 @@ export function composeProps(input: ComposeInput): ViralTemplateProps {
   if (totalSec > MAX_VIDEO_SECONDS) {
     throw new Error(`La vidéo durerait ${Math.round(totalSec)} s : raccourcis le script (maximum ${MAX_VIDEO_SECONDS} s).`);
   }
+  const branding = input.branding ?? DEFAULT_BRANDING;
   const words = wordsFromBoundaries(input.events, input.script, input.audioSec);
   return {
     hookText: input.hook,
@@ -37,6 +60,8 @@ export function composeProps(input: ComposeInput): ViralTemplateProps {
     audioSrc: input.audioSrc,
     totalDurationInFrames: Math.ceil(totalSec * FPS),
     hookFrames: hookFramesFor(input.hook, words),
-    brandTag: 'tikvo',
+    brandTag: branding.showBrand ? branding.brandName : undefined,
+    showNiche: branding.showNiche,
+    showProgress: branding.showProgress,
   };
 }

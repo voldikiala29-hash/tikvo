@@ -194,6 +194,25 @@ export async function listDayRenders(day: string): Promise<RenderJob[]> {
   return (await authedCall<{ jobs: RenderJob[] }>(`/api/jobs?day=${encodeURIComponent(day)}`)).jobs;
 }
 
+export interface ScriptItem {
+  hook: string;
+  phrase1: string;
+  phrase2: string;
+  cta: string;
+  pexelsQuery: string;
+}
+
+/** Scripts écrits par Meta Llama (Workers AI) pour les niches choisies. Vide si l'IA est indisponible. */
+export async function generateScripts(
+  niches: string[],
+  duration: number,
+): Promise<{ scripts: Record<string, ScriptItem[]>; model?: string }> {
+  return authedCall<{ scripts: Record<string, ScriptItem[]>; model?: string }>('/api/generate-scripts', {
+    method: 'POST',
+    body: { niches, duration },
+  });
+}
+
 // ---------------------------------------------------------------- appels
 
 export const backend = {
