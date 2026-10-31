@@ -2,7 +2,6 @@
 // Aucun appel à une IA : les textes sont des modèles remplis par sujet, déterministes et rapides.
 
 import { clipQueryFor } from './clipQueries';
-import { generateScripts, type ScriptItem } from './backendApi';
 
 export const NICHE_CATALOG = [
   { id: 'mode', label: 'Mode', emoji: '👗' },
@@ -44,54 +43,6 @@ export interface ProgramVideo {
 export interface ProgramDay {
   date: string; // AAAA-MM-JJ (heure locale)
   videos: ProgramVideo[];
-}
-
-/** Ajoute la ponctuation finale si le modèle l'a oubliée (la voix lit mieux). */
-const punctuate = (line: string): string => (/[.!?…]$/.test(line) ? line : `${line}.`);
-
-/**
- * Programme avec des scripts écrits par Meta Llama (Workers AI).
- * Les scripts sont attribués dans l'ordre du programme, niche par niche.
- * Là où l'IA ne fournit rien (indisponible, lot raté), le modèle de secours reste en place.
- */
-export async function generateProgramWithAI(
-  nicheIds: NicheId[],
-  duration: ProgramDuration,
-  startDate: Date = tomorrow(),
-): Promise<GeneratedProgram> {
-  const base = generateProgram(nicheIds, duration, startDate);
-  const niches = Array.from(new Set(nicheIds));
-
-  let scripts: Record<string, ScriptItem[]> = {};
-  try {
-    scripts = (await generateScripts(niches, PROGRAM_DURATIONS[duration].videos)).scripts ?? {};
-  } catch (err) {
-    console.warn('[programme] scripts IA indisponibles, modèles de secours :', err instanceof Error ? err.message : err);
-  }
-
-  const used = new Map<string, number>();
-  let fromAI = 0;
-  for (const day of base.days) {
-    const queriesToday = new Set<string>();
-    for (const video of day.videos) {
-      const k = used.get(video.niche) ?? 0;
-      used.set(video.niche, k + 1);
-      const item = scripts[video.niche]?.[k];
-      if (!item) {
-        queriesToday.add(video.pexelsQuery);
-        continue;
-      }
-      fromAI++;
-      video.title = item.hook;
-      video.hook = item.hook;
-      video.script = [item.hook, item.phrase1, item.phrase2, item.cta].map(punctuate).join('\n');
-      // Requête de clip : celle de l'IA si elle est nouvelle pour ce jour, sinon celle du modèle.
-      if (item.pexelsQuery && !queriesToday.has(item.pexelsQuery)) video.pexelsQuery = item.pexelsQuery;
-      queriesToday.add(video.pexelsQuery);
-    }
-  }
-  console.info(`[programme] ${fromAI}/${base.totalVideos} scripts écrits par Llama, le reste en modèle de secours`);
-  return base;
 }
 
 export interface GeneratedProgram {

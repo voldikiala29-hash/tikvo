@@ -5,7 +5,7 @@ import {
   PROGRAM_DURATIONS,
   ProgramDay,
   ProgramVideo,
-  generateProgramWithAI,
+  generateProgram,
   toLocalISODate,
 } from '../services/programGenerator';
 import {
@@ -63,7 +63,8 @@ export const ProgramView: React.FC<ProgramViewProps> = ({ uid, profile }) => {
         generatingRef.current = true;
         setStatus('generating');
         try {
-          const generated = await generateProgramWithAI(profile.niches, profile.programDuration);
+          // Pas d'IA à la création : les scripts du jour sont générés à l'ouverture de chaque journée.
+          const generated = generateProgram(profile.niches, profile.programDuration);
           const id = await saveGeneratedProgram(uid, {
             niches: profile.niches,
             duration: profile.programDuration,

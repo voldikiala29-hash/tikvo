@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Download, Film } from 'lucide-react';
 import { CopyScriptButton } from '../components/CopyScriptButton';
 import { InspirationPanel } from '../components/InspirationPanel';
@@ -9,6 +9,7 @@ import {
   createRender,
   getRender,
   getRenderSettings,
+  generateScripts,
   getScriptOverrides,
   listDayRenders,
   rewriteScript,
@@ -17,7 +18,8 @@ import {
   searchPexels,
 } from '../services/backendApi';
 import { StoredProgram, UserProfile, loadProgram, saveGeneratedProgram } from '../services/factoryStore';
-import { NICHE_CATALOG, ProgramVideo, generateProgramWithAI, toLocalISODate } from '../services/programGenerator';
+import { NICHE_CATALOG, ProgramVideo, generateProgram, toLocalISODate } from '../services/programGenerator';
+import { firstLine, scriptFromAI } from '../services/scriptText';
 import {
   ASPECTS,
   CLIP_CHOICES,
@@ -264,7 +266,7 @@ const DailyVideoCard: React.FC<DailyVideoCardProps> = ({
     try {
       const created = await createRender({
         title: video.title,
-        hook: video.hook,
+        hook: firstLine(script) || video.hook,
         script: script.trim(),
         pexelsQuery: video.pexelsQuery,
         nicheId: video.niche,
@@ -399,6 +401,9 @@ export const DailyFactory: React.FC<DailyFactoryProps> = ({ uid, profile, onView
   const [renders, setRenders] = useState<RenderJob[]>([]);
   const [settings, setSettings] = useState<RenderSettings>(() => readLocalSettings() ?? DEFAULT_RENDER_SETTINGS);
   const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [overridesLoaded, setOverridesLoaded] = useState(false);
+  const [scriptStatus, setScriptStatus] = useState<'idle' | 'generating' | 'ai' | 'model'>('idle');
+  const attempted = useRef<string | null>(null);
 
   const today = toLocalISODate(new Date());
 
@@ -438,7 +443,8 @@ export const DailyFactory: React.FC<DailyFactoryProps> = ({ uid, profile, onView
       .catch(() => undefined);
     getScriptOverrides()
       .then((o) => !cancelled && setOverrides(o))
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => !cancelled && setOverridesLoaded(true));
     listDayRenders(today)
       .then((jobs) => !cancelled && setRenders(jobs))
       .catch(() => undefined);
@@ -452,6 +458,46 @@ export const DailyFactory: React.FC<DailyFactoryProps> = ({ uid, profile, onView
     writeLocalSettings(next);
     saveRenderSettings(next).catch((err: unknown) => setError(errorText(err, 'Réglages non enregistrés.')));
   };
+
+  // Scripts du jour : Llama écrit les 3 scripts de la journée, une seule fois, puis ils sont enregistrés.
+  const todayDayData = program?.days.find((d) => d.date === today) ?? null;
+  useEffect(() => {
+    if (!program || !todayDayData || !overridesLoaded) return;
+    const day = todayDayData;
+    const attemptKey = `${program.id}|${day.date}`;
+    const keys = day.videos.map((_, i) => `${program.id}|${day.date}|${i}`);
+    if (keys.every((k) => overrides[k])) {
+      setScriptStatus('ai');
+      return;
+    }
+    if (attempted.current === attemptKey) return;
+    attempted.current = attemptKey;
+    setScriptStatus('generating');
+    (async () => {
+      try {
+        const niches = Array.from(new Set(day.videos.map((v) => v.niche)));
+        const { scripts } = await generateScripts(niches, 3);
+        const used = new Map<string, number>();
+        const updates: Record<string, string> = {};
+        day.videos.forEach((video, i) => {
+          const k = used.get(video.niche) ?? 0;
+          used.set(video.niche, k + 1);
+          const item = scripts[video.niche]?.[k];
+          if (item && !overrides[keys[i]]) updates[keys[i]] = scriptFromAI(item);
+        });
+        // Un enregistrement après l'autre.
+        for (const [key, script] of Object.entries(updates)) {
+          await saveScriptOverride(key, script);
+        }
+        setOverrides((prev) => ({ ...prev, ...updates }));
+        setScriptStatus(Object.keys(updates).length > 0 ? 'ai' : 'model');
+      } catch {
+        setScriptStatus('model');
+      }
+    })();
+    // Une seule tentative par journée et par programme : pas de relance automatique.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [program, todayDayData?.date, overridesLoaded]);
 
   const upsertRender = useCallback((job: RenderJob) => {
     setRenders((prev) => (prev.some((r) => r.id === job.id) ? prev.map((r) => (r.id === job.id ? job : r)) : [job, ...prev]));
@@ -494,7 +540,7 @@ export const DailyFactory: React.FC<DailyFactoryProps> = ({ uid, profile, onView
     try {
       const startDate = new Date();
       startDate.setHours(12, 0, 0, 0);
-      const generated = await generateProgramWithAI(profile.niches, duration, startDate);
+      const generated = generateProgram(profile.niches, duration, startDate);
       await saveGeneratedProgram(uid, { niches: profile.niches, duration, ...generated });
     } catch (err) {
       setError(errorText(err, 'Impossible de démarrer le programme.'));
@@ -528,7 +574,7 @@ export const DailyFactory: React.FC<DailyFactoryProps> = ({ uid, profile, onView
           disabled={starting}
           className="w-full py-3 rounded-xl bg-gradient-to-r from-[#00FFC6] to-[#00B8D9] text-black font-extrabold text-sm disabled:opacity-50"
         >
-          {starting ? 'Génération des scripts…' : 'Démarrer programme aujourd’hui'}
+          {starting ? 'Démarrage…' : 'Démarrer programme aujourd’hui'}
         </button>
         <button type="button" onClick={onViewProgram} className="text-xs text-gray-400 hover:text-white">
           Voir le programme complet
@@ -550,6 +596,12 @@ export const DailyFactory: React.FC<DailyFactoryProps> = ({ uid, profile, onView
       </div>
       <SettingsPanel settings={settings} onChange={changeSettings} />
       <InspirationPanel />
+      {scriptStatus === 'generating' && (
+        <p className="text-xs text-[#00FFC6]">Écriture des 3 scripts du jour par Llama…</p>
+      )}
+      {scriptStatus === 'model' && (
+        <p className="text-xs text-gray-400">Scripts de secours affichés : l’IA n’a pas répondu. Recharge la page plus tard pour réessayer.</p>
+      )}
       {error && <p className="text-xs text-red-300">{error}</p>}
       {todayDay.videos.map((video, i) => {
         const key = `${program.id}|${todayDay.date}|${i}`;

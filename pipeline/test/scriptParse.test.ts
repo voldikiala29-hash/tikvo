@@ -39,3 +39,15 @@ test('nettoie la réponse du modèle (guillemets, étiquette, blocs de code)', (
   assert.equal(cleanScriptText('Script : « Ton hook.\nUne action. »'), 'Ton hook.\nUne action.');
   assert.equal(cleanScriptText('```\nLigne un\n\nLigne deux\n```'), 'Ligne un\nLigne deux');
 });
+
+import { firstLine, scriptFromAI } from '../../src/services/scriptText.ts';
+
+test('script IA : ponctuation ajoutée, accroche = première ligne', () => {
+  const s = scriptFromAI({ hook: 'Ton téléphone te ment', phrase1: 'Ouvre les réglages', phrase2: 'Coupe les alertes.', cta: 'Abonne-toi' });
+  assert.equal(s, 'Ton téléphone te ment.\nOuvre les réglages.\nCoupe les alertes.\nAbonne-toi.');
+  assert.equal(firstLine(s), 'Ton téléphone te ment.');
+});
+
+test('l’API accepte la durée « jour » (3 scripts)', () => {
+  assert.deepEqual(parseScriptRequest({ niches: ['tech'], duration: 3 }), { niches: ['tech'], duration: 3 });
+});
