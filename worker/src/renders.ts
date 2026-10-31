@@ -3,8 +3,8 @@
 import { dispatchWorkflow } from './github';
 import { HttpError, Env } from './types';
 import { RenderSettings, resolveRenderSettings } from './renderSettings';
+import { resolveVoice } from './voices';
 
-const VOICE = 'fr-FR-VivienneMultilingualNeural';
 const DAILY_LIMIT = 60;
 
 export interface RenderInput {
@@ -145,7 +145,7 @@ export async function createRender(
     script: input.script,
     keywords: [input.pexelsQuery],
     pexelsIds: [],
-    voice: VOICE,
+    voice: resolveVoice(input.nicheId, input.settings.voice, input.settings.voiceStyle).voice,
     title: input.title,
     day: input.day,
     videoKey: input.videoKey,

@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { interpolate, Sequence, staticFile, useCurrentFrame } from 'remotion';
 import { Audio, Video } from '@remotion/media';
 import type { MontageConfig, ViralTemplateProps } from './types.ts';
 import { planSegments } from './timeline.ts';
+import { chunkAt, chunkCaptions } from './captions.ts';
 
 /** URL https telle quelle ; sinon fichier du dossier public (rendu serveur). */
 const resolveSrc = (src: string): string => (/^(https?:)?\/\//.test(src) ? src : staticFile(src));
@@ -42,24 +43,6 @@ const ClipLayer: React.FC<{
   );
 };
 
-/** Un mot de sous-titre : le mot actif est mis en couleur d'accent et légèrement agrandi. */
-const WordChip: React.FC<{ word: string; active: boolean; accent: string; size: number }> = ({ word, active, accent, size }) => (
-  <span
-    style={{
-      fontSize: size,
-      fontWeight: 900,
-      textTransform: 'uppercase',
-      letterSpacing: '0.5px',
-      color: active ? accent : '#FFFFFF',
-      textShadow: '0 4px 18px rgba(0,0,0,0.9), -3px -3px 0 #000, 3px 3px 0 #000',
-      transform: active ? 'scale(1.06)' : 'scale(1)',
-      display: 'inline-block',
-    }}
-  >
-    {word}
-  </span>
-);
-
 export const ViralTemplate: React.FC<ViralTemplateProps> = ({
   hookText,
   nicheName,
@@ -85,26 +68,24 @@ export const ViralTemplate: React.FC<ViralTemplateProps> = ({
   const hookScale = interpolate(frame, [0, 20, hookFrames - 10, hookFrames], [0.8, 1.1, 1.05, 0.95], clamp);
   const hookOpacity = interpolate(frame, [hookFrames - 10, hookFrames], [1, 0], clamp);
 
-  // 2. Sous-titres : groupes de 3 mots, le mot prononcé est en couleur d'accent.
-  let group: { words: string[]; active: number } | null = null;
+  // 2. Sous-titres : phrases courtes coupées aux fins de phrase ; le mot prononcé se distingue en couleur d'accent.
+  const chunks = useMemo(() => chunkCaptions(karaokeWords.map((w) => w.word)), [karaokeWords]);
+  let activeIdx = -1;
   if (!isHookActive && karaokeWords.length > 0) {
-    let idx = karaokeWords.findIndex((w) => frame >= w.startFrame && frame <= w.endFrame);
-    if (idx === -1) {
+    activeIdx = karaokeWords.findIndex((w) => frame >= w.startFrame && frame <= w.endFrame);
+    if (activeIdx === -1) {
       for (let i = karaokeWords.length - 1; i >= 0; i--) {
         if (karaokeWords[i].startFrame <= frame) {
-          idx = i;
+          activeIdx = i;
           break;
         }
       }
     }
-    if (idx !== -1) {
-      const base = Math.floor(idx / 3) * 3;
-      group = {
-        words: karaokeWords.slice(base, base + 3).map((w) => w.word),
-        active: idx - base,
-      };
-    }
   }
+  const chunk = activeIdx !== -1 ? chunkAt(chunks, activeIdx) : undefined;
+  const captionFade = chunk
+    ? interpolate(frame, [karaokeWords[chunk.first].startFrame, karaokeWords[chunk.first].startFrame + 6], [0, 1], clamp)
+    : 0;
 
   // 3. Progression.
   const progressPercent = Math.min(100, Math.max(0, (frame / Math.max(1, totalDurationInFrames)) * 100));
@@ -255,8 +236,8 @@ export const ViralTemplate: React.FC<ViralTemplateProps> = ({
         </div>
       )}
 
-      {/* Sous-titres */}
-      {!isHookActive && group && (
+      {/* Sous-titres : lisibles, sans majuscules criardes, sur un fond discret */}
+      {chunk && (
         <div
           style={{
             position: 'absolute',
@@ -266,25 +247,43 @@ export const ViralTemplate: React.FC<ViralTemplateProps> = ({
             display: 'flex',
             justifyContent: 'center',
             zIndex: 30,
-            padding: '0 60px',
+            padding: `0 ${70 * unit}px`,
+            opacity: captionFade,
           }}
         >
           <div
             style={{
-              display: 'inline-flex',
-              alignItems: 'baseline',
-              gap: 22 * unit,
-              backgroundColor: 'rgba(8, 8, 13, 0.6)',
-              padding: `${18 * unit}px ${40 * unit}px`,
-              borderRadius: 28 * unit,
               maxWidth: '100%',
-              flexWrap: 'wrap',
-              justifyContent: 'center',
+              backgroundColor: 'rgba(8, 8, 13, 0.62)',
+              borderRadius: 18 * unit,
+              padding: `${14 * unit}px ${30 * unit}px`,
+              boxShadow: '0 6px 24px rgba(0, 0, 0, 0.35)',
             }}
           >
-            {group.words.map((word, i) => (
-              <WordChip key={`${i}-${word}`} word={word} active={i === group!.active} accent={montage.accent} size={68 * unit} />
-            ))}
+            <div
+              style={{
+                fontSize: 50 * unit,
+                fontWeight: 600,
+                lineHeight: 1.3,
+                letterSpacing: '0.2px',
+                color: '#FFFFFF',
+                textAlign: 'center',
+                textShadow: '0 2px 6px rgba(0, 0, 0, 0.6)',
+              }}
+            >
+              {karaokeWords.slice(chunk.first, chunk.last + 1).map((w, i) => {
+                const active = chunk.first + i === activeIdx;
+                return (
+                  <span
+                    key={`${chunk.first + i}-${w.word}`}
+                    style={{ color: active ? montage.accent : '#FFFFFF', fontWeight: active ? 800 : 600 }}
+                  >
+                    {w.word}
+                    {i < chunk.last - chunk.first ? ' ' : ''}
+                  </span>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}

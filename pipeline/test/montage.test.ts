@@ -12,6 +12,8 @@ test('réglages invalides retombent sur les valeurs par défaut', () => {
     aspect: '9:16',
     montage: 'cinema',
     clipsPerScript: 0,
+    voice: null,
+    voiceStyle: null,
   });
   assert.equal(resolveRenderSettings({ clipsPerScript: 3 }).clipsPerScript, 3);
 });
@@ -29,5 +31,5 @@ test('estimation de la durée d’un script', () => {
 });
 
 test('Cinéma est le style par défaut, format 9:16', () => {
-  assert.deepEqual(DEFAULT_RENDER_SETTINGS, { aspect: '9:16', montage: 'cinema', clipsPerScript: 0 });
+  assert.deepEqual(DEFAULT_RENDER_SETTINGS, { aspect: '9:16', montage: 'cinema', clipsPerScript: 0, voice: null, voiceStyle: null });
 });

@@ -1,6 +1,7 @@
 // Réglages de montage partagés par le site, le Worker et le pipeline.
 // Aucun import à l'exécution : ce fichier doit rester utilisable tel quel par les tests Node.
 import type { MontageConfig } from './types';
+import { VOICES, VOICE_STYLES } from './voices.ts';
 
 export const ASPECTS = [
   { id: '9:16', label: 'Vertical 9:16', hint: 'TikTok, Reels, Shorts', width: 1080, height: 1920 },
@@ -112,9 +113,19 @@ export interface RenderSettings {
   aspect: AspectId;
   montage: MontageId;
   clipsPerScript: number;
+  /** Voix choisie pour ce rendu ; null = voix par défaut de la niche. */
+  voice: string | null;
+  /** Style de voix (débit, hauteur) ; null = style par défaut de la niche. */
+  voiceStyle: string | null;
 }
 
-export const DEFAULT_RENDER_SETTINGS: RenderSettings = { aspect: '9:16', montage: 'cinema', clipsPerScript: 0 };
+export const DEFAULT_RENDER_SETTINGS: RenderSettings = {
+  aspect: '9:16',
+  montage: 'cinema',
+  clipsPerScript: 0,
+  voice: null,
+  voiceStyle: null,
+};
 
 export function resolveRenderSettings(raw: unknown): RenderSettings {
   const o = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
@@ -123,7 +134,9 @@ export function resolveRenderSettings(raw: unknown): RenderSettings {
   const clips = (CLIP_CHOICES as readonly number[]).includes(Number(o.clipsPerScript))
     ? Number(o.clipsPerScript)
     : DEFAULT_RENDER_SETTINGS.clipsPerScript;
-  return { aspect, montage, clipsPerScript: clips };
+  const voice = VOICES.find((v) => v.id === o.voice)?.id ?? null;
+  const voiceStyle = VOICE_STYLES.find((s) => s.id === o.voiceStyle)?.id ?? null;
+  return { aspect, montage, clipsPerScript: clips, voice, voiceStyle };
 }
 
 export function aspectSize(id: AspectId): { width: number; height: number } {

@@ -20,6 +20,7 @@ import {
 import { StoredProgram, UserProfile, loadProgram, saveGeneratedProgram } from '../services/factoryStore';
 import { NICHE_CATALOG, ProgramVideo, generateProgram, toLocalISODate } from '../services/programGenerator';
 import { firstLine, scriptFromAI } from '../services/scriptText';
+import { VOICES, VOICE_STYLES, resolveVoice } from '../video-engine/voices';
 import {
   ASPECTS,
   CLIP_CHOICES,
@@ -225,6 +226,10 @@ const DailyVideoCard: React.FC<DailyVideoCardProps> = ({
   const [rewriting, setRewriting] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Voix et style : ceux de la niche par défaut, modifiables pour ce rendu.
+  const nicheVoice = resolveVoice(video.niche);
+  const [voiceId, setVoiceId] = useState(nicheVoice.voice);
+  const [styleId, setStyleId] = useState(nicheVoice.style);
 
   // Le script affiché suit la version enregistrée (par exemple après un rechargement).
   useEffect(() => setScript(savedScript), [savedScript]);
@@ -273,7 +278,7 @@ const DailyVideoCard: React.FC<DailyVideoCardProps> = ({
         nicheName: nicheLabel(video.niche),
         day: date,
         videoKey,
-        settings,
+        settings: { ...settings, voice: voiceId, voiceStyle: styleId },
       });
       onRender(created);
     } catch (err) {
@@ -323,6 +328,37 @@ const DailyVideoCard: React.FC<DailyVideoCardProps> = ({
               className="w-full rounded-xl bg-black/40 border border-white/10 p-2.5 text-xs text-gray-200 leading-relaxed focus:outline-none focus:border-[#00FFC6]/50"
             />
           </label>
+
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="block text-[11px] text-gray-400 mb-1">Voix off</span>
+              <select
+                value={voiceId}
+                onChange={(e) => setVoiceId(e.target.value)}
+                className="w-full rounded-lg bg-black/40 border border-white/10 px-2 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-[#00FFC6]/50"
+              >
+                {VOICES.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.label} · {v.gender} · {v.note}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="block text-[11px] text-gray-400 mb-1">Style de voix</span>
+              <select
+                value={styleId}
+                onChange={(e) => setStyleId(e.target.value)}
+                className="w-full rounded-lg bg-black/40 border border-white/10 px-2 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-[#00FFC6]/50"
+              >
+                {VOICE_STYLES.map((st) => (
+                  <option key={st.id} value={st.id}>
+                    {st.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
 
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-[11px] text-gray-500 mr-1">Ajuster la durée :</span>
