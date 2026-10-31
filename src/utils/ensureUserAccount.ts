@@ -1,33 +1,30 @@
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase';
+// Point unique d'écriture du profil users/{uid}. Respecte les règles Firestore (chaînes ISO, pas de champs inconnus).
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from '../services/firebase';
 
-export async function ensureUserAccount(user: any) {
-  if (!user?.uid) return;
-  
-  const userRef = doc(db, 'users', user.uid);
-  const snap = await getDoc(userRef);
+interface AccountSource {
+  uid: string;
+  email?: string | null;
+  displayName?: string | null;
+  photoURL?: string | null;
+}
 
+export async function ensureUserAccount(user: AccountSource): Promise<void> {
+  if (!db || !user?.uid) return;
+
+  const ref = doc(db, 'users', user.uid);
+  const now = new Date().toISOString();
+  const base = {
+    email: user.email || '',
+    displayName: user.displayName || 'tikvo creator',
+    photoURL: user.photoURL || '',
+    updatedAt: now,
+  };
+
+  const snap = await getDoc(ref);
   if (!snap.exists()) {
-    await setDoc(userRef, {
-      uid: user.uid,
-      email: user.email,
-      displayName: user.displayName || user.email?.split('@')[0],
-      photoURL: user.photoURL || '',
-      createdAt: serverTimestamp(),
-      lastLogin: serverTimestamp(),
-      plan: 'free',
-      nicheActive: 'Mode',
-      customNiches: [],
-      scheduledPosts: [],
-      accountsTikTok: [],
-      stats: { views: 0, followers: 0, earnings: 0 }
-    });
+    await setDoc(ref, { uid: user.uid, ...base, createdAt: now });
   } else {
-    await setDoc(userRef, {
-      lastLogin: serverTimestamp(),
-      email: user.email,
-      displayName: user.displayName,
-      photoURL: user.photoURL
-    }, { merge: true });
+    await setDoc(ref, base, { merge: true });
   }
 }
