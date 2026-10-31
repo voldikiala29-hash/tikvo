@@ -21,6 +21,7 @@ import { StoredProgram, UserProfile, loadProgram, saveGeneratedProgram } from '.
 import { NICHE_CATALOG, ProgramDay, ProgramVideo, generateProgram, toLocalISODate, type NicheId } from '../services/programGenerator';
 import { carryOverrides, nichesOf, totalOf, withNicheForVideo, withProgramNiches } from '../services/programEdit';
 import { firstLine, scriptFromAI } from '../services/scriptText';
+import { parseScriptPaste, type ImportedScript } from '../services/scriptImport';
 import { VOICES, VOICE_STYLES, resolveVoice } from '../video-engine/voices';
 import {
   ASPECTS,
@@ -293,6 +294,11 @@ const DailyVideoCard: React.FC<DailyVideoCardProps> = ({
   const [rewriting, setRewriting] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Import d'un script complet : la voix off remplace le script, le texte à l'écran devient l'accroche.
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [imported, setImported] = useState<ImportedScript | null>(null);
+  const [hookOverride, setHookOverride] = useState<string | null>(null);
   // Voix et style : ceux de la niche par défaut, modifiables pour ce rendu.
   const nicheVoice = resolveVoice(video.niche);
   const [voiceId, setVoiceId] = useState(nicheVoice.voice);
@@ -343,7 +349,7 @@ const DailyVideoCard: React.FC<DailyVideoCardProps> = ({
     try {
       const created = await createRender({
         title: video.title,
-        hook: firstLine(script) || video.hook,
+        hook: hookOverride || firstLine(script) || video.hook,
         script: script.trim(),
         pexelsQuery: video.pexelsQuery,
         nicheId: video.niche,
@@ -416,6 +422,69 @@ const DailyVideoCard: React.FC<DailyVideoCardProps> = ({
               className="w-full rounded-xl bg-black/40 border border-white/10 p-2.5 text-xs text-gray-200 leading-relaxed focus:outline-none focus:border-[#00FFC6]/50"
             />
           </label>
+
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => setImportOpen((v) => !v)}
+              className="text-[11px] font-bold text-[#00FFC6] hover:underline"
+            >
+              {importOpen ? 'Fermer l’import' : 'Importer un script complet (format, voix, texte à l’écran)'}
+            </button>
+            {importOpen && (
+              <div className="space-y-2 rounded-xl border border-white/10 p-3">
+                <textarea
+                  value={importText}
+                  onChange={(e) => setImportText(e.target.value)}
+                  rows={6}
+                  placeholder="Colle ton script ici (format, audio, 0:00 - 0:02…, « voix »…)"
+                  className="w-full rounded-lg bg-black/40 border border-white/10 p-2 text-xs text-gray-200 focus:outline-none focus:border-[#00FFC6]/50"
+                />
+                <button
+                  type="button"
+                  onClick={() => setImported(parseScriptPaste(importText))}
+                  disabled={importText.trim().length < 10}
+                  className="px-3 py-1.5 rounded-lg bg-white/10 text-white text-xs font-bold disabled:opacity-40"
+                >
+                  Analyser
+                </button>
+                {imported && (
+                  <div className="space-y-1.5 text-[11px] text-gray-300">
+                    {imported.format && <p><span className="text-gray-500">Format :</span> {imported.format}</p>}
+                    {imported.audio && <p><span className="text-gray-500">Audio :</span> {imported.audio}</p>}
+                    {imported.onScreen.length > 0 && (
+                      <p><span className="text-gray-500">Texte à l’écran (accroche) :</span> {imported.onScreen.join(' · ')}</p>
+                    )}
+                    <p><span className="text-gray-500">Voix off détectée :</span></p>
+                    <pre className="whitespace-pre-wrap rounded-lg bg-black/40 p-2 text-gray-200">{imported.voiceover || '(aucune parole détectée)'}</pre>
+                    {imported.shots.length > 0 && (
+                      <div>
+                        <p className="text-gray-500">À filmer ou montrer (non généré par tikvo) :</p>
+                        <ul className="list-disc pl-4">
+                          {imported.shots.map((l, i) => (
+                            <li key={i}>{l}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      disabled={imported.voiceover.length < 10}
+                      onClick={() => {
+                        setScript(imported.voiceover);
+                        setHookOverride(imported.onScreen[0] ?? null);
+                        void persist(imported.voiceover);
+                        setImportOpen(false);
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-[#00FFC6] to-[#00B8D9] text-black text-xs font-extrabold disabled:opacity-40"
+                    >
+                      Utiliser cette voix off pour la vidéo
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           <div className="grid grid-cols-2 gap-2">
             <label className="block">
