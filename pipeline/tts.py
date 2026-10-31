@@ -14,12 +14,15 @@ import edge_tts
 GTTS_LANG = "fr"
 
 
-async def synthesize(text: str, voice: str, rate: str, boundary: str):
+async def synthesize(text: str, voice: str, rate: str, pitch: str, boundary: str):
     try:
-        communicate = edge_tts.Communicate(text, voice, rate=rate, boundary=boundary)
+        communicate = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch, boundary=boundary)
     except TypeError:
-        # Anciennes versions d'edge-tts : pas de paramètre "boundary".
-        communicate = edge_tts.Communicate(text, voice, rate=rate)
+        # Anciennes versions d'edge-tts : pas de "pitch" ni de "boundary".
+        try:
+            communicate = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch)
+        except TypeError:
+            communicate = edge_tts.Communicate(text, voice, rate=rate)
 
     audio = bytearray()
     events = []
@@ -54,12 +57,12 @@ def synthesize_gtts(text: str, audio_out: str) -> bytes:
         return handle.read()
 
 
-async def synthesize_edge_all(text: str, voice: str, rate: str):
-    audio, events = await synthesize(text, voice, rate, "WordBoundary")
+async def synthesize_edge_all(text: str, voice: str, rate: str, pitch: str):
+    audio, events = await synthesize(text, voice, rate, pitch, "WordBoundary")
     kind = "word"
     if audio and not events:
         # Certaines voix n'émettent que des limites de phrases.
-        audio, events = await synthesize(text, voice, rate, "SentenceBoundary")
+        audio, events = await synthesize(text, voice, rate, pitch, "SentenceBoundary")
         kind = "sentence"
     if not audio:
         raise RuntimeError("Edge TTS n'a renvoyé aucun audio")
@@ -72,6 +75,7 @@ async def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--voice", required=True)
     parser.add_argument("--rate", default="+6%")
+    parser.add_argument("--pitch", default="+0Hz")
     parser.add_argument("--text-file", required=True)
     parser.add_argument("--audio-out", required=True)
     parser.add_argument("--events-out", required=True)
@@ -85,7 +89,7 @@ async def main() -> int:
 
     engine = "edge"
     try:
-        audio, events, kind = await synthesize_edge_all(text, args.voice, args.rate)
+        audio, events, kind = await synthesize_edge_all(text, args.voice, args.rate, args.pitch)
     except Exception as exc:  # noqa: BLE001
         if not is_edge_blocked(exc):
             raise

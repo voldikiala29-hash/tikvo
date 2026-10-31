@@ -7,6 +7,7 @@ import { ProgressReporter, WorkerApi, probe, requireEnv, run } from './lib.ts';
 import { buildQueries, collectClips, downloadTo } from './stock.ts';
 import { renderViral } from './renderer.ts';
 import { synthesizeVoice } from './tts.ts';
+import { resolveVoice } from '../src/video-engine/voices.ts';
 import { aspectSize, clipCountFor, resolveRenderSettings } from '../src/video-engine/montage.ts';
 
 const RELEASE_TAG = 'renders';
@@ -86,13 +87,17 @@ async function main(): Promise<void> {
 
   // 1. Voix off : c'est elle qui fixe la durée de la vidéo.
   await reporter.report('Synthèse de la voix off (Edge TTS)…', 5, true);
+  // Voix et style propres à la niche, sauf choix explicite pour ce rendu.
+  const chosen = resolveVoice(params.niche.id, settings.voice, settings.voiceStyle);
   const voice = await synthesizeVoice({
     text: params.script,
-    voice: params.voice || 'fr-FR-VivienneMultilingualNeural',
+    voice: chosen.voice,
+    rate: chosen.rate,
+    pitch: chosen.pitch,
     workDir,
     audioFile: path.join(publicDir, 'audio', 'voice.mp3'),
   });
-  console.log(`Voix : ${voice.audioSec.toFixed(1)} s, moteur ${voice.engine}, événements ${voice.kind} (${voice.events.length})`);
+  console.log(`Voix : ${chosen.voice} (${chosen.style}), ${voice.audioSec.toFixed(1)} s, moteur ${voice.engine}, événements ${voice.kind} (${voice.events.length})`);
   if (voice.audioSec + TAIL_SECONDS > MAX_VIDEO_SECONDS) {
     throw new Error(`La voix dure ${Math.round(voice.audioSec)} s : raccourcis le script (maximum ${MAX_VIDEO_SECONDS - 1} s).`);
   }

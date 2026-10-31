@@ -26,6 +26,7 @@ export async function synthesizeVoice(options: {
   workDir: string;
   audioFile: string;
   rate?: string;
+  pitch?: string;
 }): Promise<VoiceResult> {
   const text = cleanForSpeech(options.text);
   if (text.length < 10) throw new Error('Le script est vide après nettoyage.');
@@ -44,6 +45,8 @@ export async function synthesizeVoice(options: {
       options.voice,
       '--rate',
       options.rate ?? '+6%',
+      '--pitch',
+      options.pitch ?? '+0Hz',
       '--text-file',
       textFile,
       '--audio-out',
