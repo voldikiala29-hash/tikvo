@@ -20,9 +20,10 @@ test('toCandidate écarte les clips trop courts ou sans fichier', () => {
   assert.equal(toCandidate({ id: 6, duration: 9, user: 'Ana', videos: { large: v(1080, 1920) } })?.credit, 'Ana');
 });
 
-test('buildQueries met les requêtes de la niche en premier, sans doublon', () => {
-  const q = buildQueries('mode', ['Mode', 'fashion outfit']);
-  assert.equal(q[0], 'fashion outfit');
+test('buildQueries place la requête de la vidéo avant les requêtes de niche, sans doublon', () => {
+  const q = buildQueries('mode', ['Fashion Outfit Mini Skirt', 'fashion outfit']);
+  assert.equal(q[0], 'fashion outfit mini skirt');
+  assert.equal(q[1], 'fashion outfit');
   assert.equal(new Set(q).size, q.length);
   assert.ok(buildQueries('inconnue', []).includes('aesthetic lifestyle'));
 });
