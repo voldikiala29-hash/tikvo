@@ -38,6 +38,7 @@ jobs:
           put RENDER_SECRET "${{ secrets.RENDER_SECRET }}"
           put GH_DISPATCH_TOKEN "${{ secrets.GH_DISPATCH_TOKEN }}"
           put PEXELS_API_KEY "${{ secrets.PEXELS_API_KEY }}"
+          put FIREBASE_API_KEY "${{ secrets.VITE_FIREBASE_API_KEY }}"
       - name: Déploie le Worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

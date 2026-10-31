@@ -1,4 +1,5 @@
 import { dispatchWorkflow } from './github';
+import { requireFirebaseUser, searchPexelsVideos } from './pexels';
 import {
   asRecord,
   parseJobParams,
@@ -204,6 +205,16 @@ async function runCron(env: Env): Promise<void> {
     .run();
 }
 
+async function handlePexelsSearch(request: Request, env: Env): Promise<Response> {
+  await requireFirebaseUser(request, env);
+  const url = new URL(request.url);
+  const q = (url.searchParams.get('q') || '').trim().slice(0, 120);
+  if (!q) throw new HttpError(400, 'invalid_param', 'Paramètre q manquant.');
+  const perPage = Math.min(10, Math.max(1, Number(url.searchParams.get('per_page')) || 3));
+  const videos = await searchPexelsVideos(env, q, perPage);
+  return respond(request, env, { videos });
+}
+
 async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/+$/, '') || '/';
@@ -214,6 +225,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
   if (method === 'GET' && (path === '/' || path === '/health')) return handleHealth(request, env);
 
+  if (method === 'GET' && path === '/api/pexels/search') return handlePexelsSearch(request, env);
   const m = path.match(/^\/internal\/jobs\/([0-9a-f-]{36})$/);
   if (m && method === 'GET') return handleInternalGetJob(request, env, m[1]);
   if (m && method === 'POST') return handleInternalPatchJob(request, env, m[1]);
