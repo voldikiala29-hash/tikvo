@@ -26,6 +26,13 @@ export interface Env {
   FIREBASE_API_KEY?: string;
   // Workers AI (binding « AI » du wrangler.toml) : Meta Llama.
   AI?: { run(model: string, input: Record<string, unknown>): Promise<unknown> };
+  // Fournisseurs gratuits (facultatifs) : sans clé, ils sont ignorés.
+  GROQ_API_KEY?: string;
+  GROQ_MODEL?: string;
+  GEMINI_API_KEY?: string;
+  GEMINI_MODEL?: string;
+  OPENROUTER_API_KEY?: string;
+  OPENROUTER_MODEL?: string;
 }
 
 export type JobStatus =
