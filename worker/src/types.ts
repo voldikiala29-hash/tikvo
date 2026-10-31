@@ -4,8 +4,9 @@ export interface Env {
   // Variables non secrètes (wrangler.toml)
   FRONTEND_URL: string;
   FIREBASE_PROJECT_ID: string;
-  GITHUB_REPO: string;
-  GITHUB_REF: string;
+  GITHUB_REPO?: string;
+  GITHUB_BRANCH?: string;
+  GITHUB_WORKFLOW?: string;
   TIKTOK_SCOPES: string;
   EXTRA_ORIGINS?: string;
   ALLOWED_OPEN_IDS?: string;

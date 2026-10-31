@@ -1,6 +1,8 @@
 // Génère un programme de vidéos à partir de templates par niche.
 // Aucun appel à une IA : les textes sont des modèles remplis par sujet, déterministes et rapides.
 
+import { clipQueryFor } from './clipQueries';
+
 export const NICHE_CATALOG = [
   { id: 'mode', label: 'Mode', emoji: '👗' },
   { id: 'fitness', label: 'Fitness', emoji: '💪' },
@@ -49,7 +51,6 @@ export interface GeneratedProgram {
 }
 
 interface NicheTemplate {
-  pexelsQuery: string;
   subjects: string[];
   hooks: string[];
 }
@@ -69,7 +70,6 @@ const GENERIC_HOOKS = [
 
 const TEMPLATES: Record<NicheId, NicheTemplate> = {
   mode: {
-    pexelsQuery: 'fashion outfit',
     subjects: [
       'les pièces basiques', 'ta garde-robe', 'les accessoires petit prix', 'les tenues de bureau',
       'les couleurs qui t’avantagent', 'les vêtements de seconde main', 'les silhouettes qui allongent', 'le style minimaliste',
@@ -83,57 +83,46 @@ const TEMPLATES: Record<NicheId, NicheTemplate> = {
     ],
   },
   fitness: {
-    pexelsQuery: 'home workout',
     subjects: ['les abdos', 'la course à pied', 'les étirements du matin', 'la récupération', 'les repas avant le sport', 'la motivation du lundi', 'les séances de 10 minutes', 'la prise de muscle', 'les pompes', 'les squats', 'l’échauffement', 'la mobilité des hanches'],
     hooks: GENERIC_HOOKS,
   },
   business: {
-    pexelsQuery: 'office laptop work',
     subjects: ['ta première offre', 'ton prix', 'la prospection', 'ton budget de départ', 'les réseaux sociaux pour vendre', 'ta liste de clients', 'les petites dépenses', 'ton temps de travail', 'ton premier client', 'ta page de vente', 'ton tunnel de vente', 'ta tarification mensuelle'],
     hooks: GENERIC_HOOKS,
   },
   crypto: {
-    pexelsQuery: 'bitcoin chart',
     subjects: ['le DCA', 'la sécurité de ton wallet', 'les arnaques en ligne', 'la gestion du risque', 'les frais de transaction', 'ton premier achat', 'les cycles de marché', 'les stablecoins', 'les exchanges', 'la diversification', 'les erreurs de débutant', 'la fiscalité des cryptos'],
     hooks: GENERIC_HOOKS,
   },
   motivation: {
-    pexelsQuery: 'sunrise running',
     subjects: ['la procrastination', 'ta routine du matin', 'les mauvaises habitudes', 'la discipline', 'le doute', 'tes objectifs de l’année', 'la régularité', 'le repos', 'ta confiance en toi', 'les réussites du mois', 'les excuses', 'le bilan de la semaine'],
     hooks: GENERIC_HOOKS,
   },
   cuisine: {
-    pexelsQuery: 'cooking kitchen',
     subjects: ['les repas de la semaine', 'le meal prep', 'les épices de base', 'les cuissons au four', 'les restes du frigo', 'les petits-déjeuners rapides', 'les sauces maison', 'les recettes à 5 ingrédients', 'les soupes d’hiver', 'les desserts express', 'les marinades', 'les légumes de saison'],
     hooks: GENERIC_HOOKS,
   },
   voyage: {
-    pexelsQuery: 'travel landscape',
     subjects: ['les vols pas chers', 'ta valise', 'les hôtels à petit budget', 'les itinéraires de 3 jours', 'les pièges touristiques', 'les assurances voyage', 'le sac à dos', 'les destinations hors saison', 'les bagages cabine', 'les trains', 'les applis de voyage', 'les visas'],
     hooks: GENERIC_HOOKS,
   },
   tech: {
-    pexelsQuery: 'technology smartphone',
     subjects: ['ton smartphone', 'la sécurité de ton compte', 'les applis gratuites', 'ton stockage cloud', 'les raccourcis clavier', 'ton ordinateur lent', 'les outils IA gratuits', 'ta batterie', 'ton wifi', 'les mots de passe', 'les notifications', 'ton email'],
     hooks: GENERIC_HOOKS,
   },
   beaute: {
-    pexelsQuery: 'skincare routine',
     subjects: ['la routine skincare du soir', 'les soins à petit prix', 'les erreurs de maquillage', 'le démaquillage', 'l’hydratation', 'les produits à éviter', 'le contour des yeux', 'les cheveux secs', 'le SPF', 'les lèvres gercées', 'les ongles', 'le rasage'],
     hooks: GENERIC_HOOKS,
   },
   musique: {
-    pexelsQuery: 'music studio',
     subjects: ['ton premier beat', 'les accords faciles', 'ton micro', 'la composition', 'les logiciels gratuits', 'les refrains qui restent', 'le mixage', 'la voix', 'ta playlist', 'les concerts', 'le son de ta voix', 'ton home studio'],
     hooks: GENERIC_HOOKS,
   },
   sport: {
-    pexelsQuery: 'football training',
     subjects: ['le foot amateur', 'la préparation avant match', 'la récupération après match', 'les blessures courantes', 'le running débutant', 'le vélo', 'la natation', 'les chaussures de sport', 'le tennis', 'le basket', 'le stretching après effort', 'le coaching sportif'],
     hooks: GENERIC_HOOKS,
   },
   humour: {
-    pexelsQuery: 'funny reaction',
     subjects: ['les réunions Zoom', 'les parents', 'les courses au supermarché', 'les chats', 'les débuts de semaine', 'les livreurs', 'le dimanche soir', 'les voisins', 'les cousins', 'les mariages', 'les mardis', 'les applications de rencontre'],
     hooks: ['Quand {s} te dépasse', '{s} : la vérité brute', 'Personne ne parle de {s}', 'Ton avis sur {s} ?', 'Le moment où {s} te trahit', 'Ce que {s} ne te dit jamais', 'Tu reconnais {s} ?', 'Dix secondes sur {s}', 'Le plus drôle sur {s}', 'Qui d’autre vit ça avec {s} ?'],
   },
@@ -186,7 +175,7 @@ function buildVideo(niche: NicheId, k: number, n: number, time: string): Program
     title: hook,
     hook: capitalize(subject),
     script: [`${hook}.`, body, cta].join('\n'),
-    pexelsQuery: t.pexelsQuery,
+    pexelsQuery: clipQueryFor(niche, n),
     niche,
     status: 'planned',
   };

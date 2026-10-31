@@ -13,8 +13,8 @@ export const NICHE_QUERIES: Record<string, string[]> = {
 };
 
 export function buildQueries(nicheId: string, keywords: string[]): string[] {
-  const queries = [...(NICHE_QUERIES[nicheId] || []), ...keywords.map((k) => k.trim()).filter(Boolean)];
-  queries.push('aesthetic lifestyle');
+  // Les mots-clés de la vidéo passent en premier : ce sont eux qui distinguent deux vidéos d'une même niche.
+  const queries = [...keywords.map((k) => k.trim()).filter(Boolean), ...(NICHE_QUERIES[nicheId] || []), 'aesthetic lifestyle'];
   return [...new Set(queries.map((q) => q.toLowerCase()))];
 }
 
