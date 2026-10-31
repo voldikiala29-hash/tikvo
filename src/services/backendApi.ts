@@ -216,8 +216,9 @@ export async function generateScripts(
 }
 
 /** Réglages de rendu de l'utilisateur (format, style, nombre de plans). */
-export async function getRenderSettings(): Promise<RenderSettings> {
-  return (await authedCall<{ settings: RenderSettings }>('/api/settings')).settings;
+/** `saved` : vrai si l'utilisateur a déjà enregistré ses réglages côté serveur. */
+export async function getRenderSettings(): Promise<{ settings: RenderSettings; saved: boolean }> {
+  return authedCall<{ settings: RenderSettings; saved: boolean }>('/api/settings');
 }
 
 export async function saveRenderSettings(settings: RenderSettings): Promise<RenderSettings> {

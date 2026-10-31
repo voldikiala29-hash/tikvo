@@ -16,7 +16,7 @@ export const MONTAGES: { id: MontageId; label: string; description: string; conf
   {
     id: 'dynamique',
     label: 'Dynamique',
-    description: 'Rythme vif, zoom appuyé, coupes sèches.',
+    description: 'Zoom appuyé + coupes sèches, rythme vif',
     config: {
       transitionFrames: 0,
       zoom: 1.18,
@@ -31,7 +31,7 @@ export const MONTAGES: { id: MontageId; label: string; description: string; conf
   {
     id: 'cinema',
     label: 'Cinéma',
-    description: 'Fondus doux, bandes noires, teinte chaude.',
+    description: 'Bandes noires + vignettage + zoom lent',
     config: {
       transitionFrames: 18,
       zoom: 1.06,
@@ -46,7 +46,7 @@ export const MONTAGES: { id: MontageId; label: string; description: string; conf
   {
     id: 'pop',
     label: 'Pop',
-    description: 'Couleurs vives, sous-titres au centre, accent rose.',
+    description: 'Couleurs vives + sous-titres au centre',
     config: {
       transitionFrames: 6,
       zoom: 1.25,
@@ -61,7 +61,7 @@ export const MONTAGES: { id: MontageId; label: string; description: string; conf
   {
     id: 'minimal',
     label: 'Minimal',
-    description: 'Sobre, fondus discrets, typographie épurée.',
+    description: 'Sobre : fondus discrets, sans effet',
     config: {
       transitionFrames: 12,
       zoom: 1.03,
@@ -76,7 +76,7 @@ export const MONTAGES: { id: MontageId; label: string; description: string; conf
   {
     id: 'documentaire',
     label: 'Documentaire',
-    description: 'Noir et blanc, mouvement lent, bandes noires.',
+    description: 'Noir et blanc + bandes noires + mouvement lent',
     config: {
       transitionFrames: 24,
       zoom: 1.1,
@@ -91,7 +91,7 @@ export const MONTAGES: { id: MontageId; label: string; description: string; conf
   {
     id: 'story',
     label: 'Story',
-    description: 'Couleurs chaudes, accroche en haut, coupes rythmées.',
+    description: 'Teinte chaude + accroche en haut + coupes rythmées',
     config: {
       transitionFrames: 8,
       zoom: 1.15,
@@ -114,7 +114,7 @@ export interface RenderSettings {
   clipsPerScript: number;
 }
 
-export const DEFAULT_RENDER_SETTINGS: RenderSettings = { aspect: '9:16', montage: 'dynamique', clipsPerScript: 0 };
+export const DEFAULT_RENDER_SETTINGS: RenderSettings = { aspect: '9:16', montage: 'cinema', clipsPerScript: 0 };
 
 export function resolveRenderSettings(raw: unknown): RenderSettings {
   const o = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};

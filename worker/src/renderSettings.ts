@@ -9,7 +9,7 @@ export interface RenderSettings {
   clipsPerScript: number;
 }
 
-export const DEFAULT_SETTINGS: RenderSettings = { aspect: '9:16', montage: 'dynamique', clipsPerScript: 0 };
+export const DEFAULT_SETTINGS: RenderSettings = { aspect: '9:16', montage: 'cinema', clipsPerScript: 0 };
 
 export function resolveRenderSettings(raw: unknown): RenderSettings {
   const o = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};

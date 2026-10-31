@@ -256,7 +256,7 @@ async function handleGetSettings(request: Request, env: Env): Promise<Response> 
   } catch {
     raw = null;
   }
-  return respond(request, env, { settings: resolveRenderSettings(raw) });
+  return respond(request, env, { settings: resolveRenderSettings(raw), saved: row !== null && raw !== null });
 }
 
 async function handlePutSettings(request: Request, env: Env): Promise<Response> {
