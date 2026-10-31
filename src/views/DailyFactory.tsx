@@ -505,6 +505,8 @@ const DailyVideoCard: React.FC<DailyVideoCardProps> = ({
             </button>
           )}
 
+          {rendered && job && <p className="text-[11px] text-gray-400">{job.step}</p>}
+
           {rendered && (
             <button
               type="button"

@@ -58,3 +58,8 @@ export function resolveVoice(nicheId: string | null | undefined, voice?: unknown
   const s = VOICE_STYLES.find((x) => x.id === styleId) ?? VOICE_STYLES[0];
   return { voice: voiceId, style: styleId, rate: s.rate, pitch: s.pitch };
 }
+
+/** Nom affiché d'une voix (ex. « Henri »). */
+export function voiceLabel(voice: string): string {
+  return VOICES.find((v) => v.id === voice)?.label ?? voice;
+}

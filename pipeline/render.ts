@@ -7,7 +7,7 @@ import { ProgressReporter, WorkerApi, probe, requireEnv, run } from './lib.ts';
 import { buildQueries, collectClips, downloadTo } from './stock.ts';
 import { renderViral } from './renderer.ts';
 import { synthesizeVoice } from './tts.ts';
-import { resolveVoice } from '../src/video-engine/voices.ts';
+import { resolveVoice, voiceLabel } from '../src/video-engine/voices.ts';
 import { aspectSize, clipCountFor, resolveRenderSettings } from '../src/video-engine/montage.ts';
 
 const RELEASE_TAG = 'renders';
@@ -85,6 +85,7 @@ async function main(): Promise<void> {
   await mkdir(path.join(publicDir, 'clips'), { recursive: true });
   await mkdir(path.join(publicDir, 'audio'), { recursive: true });
 
+  let voiceNote = '';
   // Durées par étape, lues dans les journaux GitHub Actions pour cibler les lenteurs.
   const t0 = Date.now();
   const lap = (label: string) => console.log(`[temps] ${label} : ${((Date.now() - t0) / 1000).toFixed(1)} s depuis le début`);
@@ -102,6 +103,11 @@ async function main(): Promise<void> {
     audioFile: path.join(publicDir, 'audio', 'voice.mp3'),
   });
   console.log(`Voix : ${chosen.voice} (${chosen.style}), ${voice.audioSec.toFixed(1)} s, moteur ${voice.engine}, événements ${voice.kind} (${voice.events.length})`);
+  // Le moteur de secours (gTTS) ne sait pas parler avec la voix choisie : on le dit dans la carte.
+  voiceNote = voice.engine === 'edge' ? `voix ${voiceLabel(chosen.voice)}` : `voix de secours gTTS (« ${voiceLabel(chosen.voice)} » indisponible)`;
+  if (voice.engine !== 'edge') {
+    await reporter.report(`Voix de secours gTTS : « ${voiceLabel(chosen.voice)} » indisponible sur Edge pour le moment`, 12, true);
+  }
   if (voice.audioSec + TAIL_SECONDS > MAX_VIDEO_SECONDS) {
     throw new Error(`La voix dure ${Math.round(voice.audioSec)} s : raccourcis le script (maximum ${MAX_VIDEO_SECONDS - 1} s).`);
   }
@@ -187,7 +193,7 @@ async function main(): Promise<void> {
 
   await api.patchJob(jobId, {
     status: 'rendered',
-    step: 'Vidéo prête',
+    step: voiceNote ? `Vidéo prête · ${voiceNote}` : 'Vidéo prête',
     progress: 100,
     videoUrl,
     videoBytes: info.size,
