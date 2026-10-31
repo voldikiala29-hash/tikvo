@@ -1,6 +1,17 @@
-import type { ViralTemplateProps } from '../src/video-engine/types.ts';
+import type { MontageConfig, ViralTemplateProps } from '../src/video-engine/types.ts';
 import { FPS, hookFramesFor, wordsFromBoundaries } from '../src/video-engine/timeline.ts';
 import type { BoundaryEvent } from '../src/video-engine/timeline.ts';
+import {
+  aspectSize,
+  DEFAULT_RENDER_SETTINGS,
+  montageConfig,
+  resolveRenderSettings,
+  type RenderSettings,
+} from '../src/video-engine/montage.ts';
+
+/** Durée de silence/respiration à la fin de la vidéo. */
+export const TAIL_SECONDS = 0.8;
+export const MAX_VIDEO_SECONDS = 180;
 
 export interface Branding {
   showBrand: boolean;
@@ -24,9 +35,6 @@ export function resolveBranding(raw: unknown): Branding {
 }
 
 export interface ComposeInput {
-  branding?: Branding;
-  /** Durée choisie par l'utilisateur (15, 30 ou 60 s) : la vidéo dure au moins cette durée. */
-  targetSec?: number;
   hook: string;
   nicheName: string;
   script: string;
@@ -34,19 +42,24 @@ export interface ComposeInput {
   audioSec: number;
   audioSrc: string;
   clips: { id: string; src: string; durationSec: number; credit?: string }[];
+  branding?: Branding;
+  settings?: RenderSettings;
 }
 
-/** Durée de silence/respiration à la fin de la vidéo. */
-export const TAIL_SECONDS = 0.8;
-export const MAX_VIDEO_SECONDS = 180;
-
+/**
+ * La durée de la vidéo est celle de la voix : elle dépend du script, pas d'un réglage fixe.
+ * Les plans se répartissent sur cette durée.
+ */
 export function composeProps(input: ComposeInput): ViralTemplateProps {
-  const totalSec = Math.max(input.targetSec ?? 0, input.audioSec + TAIL_SECONDS);
+  const totalSec = input.audioSec + TAIL_SECONDS;
   if (totalSec > MAX_VIDEO_SECONDS) {
     throw new Error(`La vidéo durerait ${Math.round(totalSec)} s : raccourcis le script (maximum ${MAX_VIDEO_SECONDS} s).`);
   }
-  const branding = input.branding ?? DEFAULT_BRANDING;
   const words = wordsFromBoundaries(input.events, input.script, input.audioSec);
+  const branding = input.branding ?? DEFAULT_BRANDING;
+  const settings = input.settings ?? DEFAULT_RENDER_SETTINGS;
+  const size = aspectSize(settings.aspect);
+  const montage: MontageConfig = montageConfig(settings.montage);
   return {
     hookText: input.hook,
     nicheName: input.nicheName,
@@ -63,5 +76,10 @@ export function composeProps(input: ComposeInput): ViralTemplateProps {
     brandTag: branding.showBrand ? branding.brandName : undefined,
     showNiche: branding.showNiche,
     showProgress: branding.showProgress,
+    width: size.width,
+    height: size.height,
+    montage,
   };
 }
+
+export { resolveRenderSettings };

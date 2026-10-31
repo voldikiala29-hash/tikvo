@@ -125,7 +125,7 @@ export async function searchPexels(query: string, perPage = 3): Promise<PexelsPr
 
 // ---------------------------------------------------------------- rendus MP4
 
-export type RenderDuration = 15 | 30 | 60;
+import type { RenderSettings } from '../video-engine/montage';
 export type RenderStatus = 'queued' | 'rendering' | 'rendered' | 'failed';
 
 export interface RenderJob {
@@ -135,7 +135,7 @@ export interface RenderJob {
   progress: number;
   day: string | null;
   videoKey: string | null;
-  duration: number | null;
+  settings: RenderSettings;
   videoUrl: string | null;
   durationSec: number | null;
   error: string | null;
@@ -151,7 +151,9 @@ export interface RenderRequest {
   nicheName: string;
   day: string;
   videoKey: string;
-  duration: RenderDuration;
+  /** Script final (éventuellement modifié) : c'est lui qui fixe la durée. */
+  script: string;
+  settings: RenderSettings;
 }
 
 /** Appel authentifié (jeton Firebase de l'utilisateur) vers le Worker. */
@@ -211,6 +213,29 @@ export async function generateScripts(
     method: 'POST',
     body: { niches, duration },
   });
+}
+
+/** Réglages de rendu de l'utilisateur (format, style, nombre de plans). */
+export async function getRenderSettings(): Promise<RenderSettings> {
+  return (await authedCall<{ settings: RenderSettings }>('/api/settings')).settings;
+}
+
+export async function saveRenderSettings(settings: RenderSettings): Promise<RenderSettings> {
+  return (await authedCall<{ settings: RenderSettings }>('/api/settings', { method: 'PUT', body: { settings } })).settings;
+}
+
+/** Scripts modifiés par l'utilisateur, indexés par clé « programme|jour|index ». */
+export async function getScriptOverrides(): Promise<Record<string, string>> {
+  return (await authedCall<{ overrides: Record<string, string> }>('/api/script-overrides')).overrides;
+}
+
+export async function saveScriptOverride(key: string, script: string): Promise<void> {
+  await authedCall<{ ok: boolean }>('/api/script-override', { method: 'PUT', body: { key, script } });
+}
+
+/** Réécrit un script par Meta Llama pour qu'il dure environ `targetSeconds`. */
+export async function rewriteScript(script: string, targetSeconds: number): Promise<string> {
+  return (await authedCall<{ script: string }>('/api/rewrite-script', { method: 'POST', body: { script, targetSeconds } })).script;
 }
 
 // ---------------------------------------------------------------- appels

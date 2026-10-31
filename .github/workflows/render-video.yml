@@ -40,16 +40,28 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Dépendances système (ffmpeg, Chromium pour Remotion)
+      - name: Dépendances système (ffmpeg, polices) si absentes
         run: |
-          sudo apt-get update -y
-          sudo apt-get install -y ffmpeg fonts-dejavu-core fonts-liberation
+          if command -v ffmpeg >/dev/null 2>&1 && fc-list | grep -qi dejavu; then
+            echo "ffmpeg et polices déjà présents"
+          else
+            sudo apt-get update -y
+            sudo apt-get install -y ffmpeg fonts-dejavu-core fonts-liberation
+          fi
 
       - name: "Dépendances Python (voix off : Edge TTS, repli gTTS)"
         run: |
           # Dernières versions : Microsoft change régulièrement le jeton qui évite le 403.
           pip install --quiet --upgrade edge-tts gtts
           python3 -c "import importlib.metadata as m; print('edge-tts', m.version('edge-tts'), '| gtts', m.version('gtts'))"
+
+      # Pas de lockfile : node_modules est gardé en cache tant que package.json ne change pas.
+      # Inclut le navigateur Remotion s'il est installé dans node_modules.
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('package.json') }}
 
       - name: Dépendances Node
         run: npm ci --legacy-peer-deps || npm install --legacy-peer-deps

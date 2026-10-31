@@ -58,3 +58,16 @@ export function parseScriptRequest(body: Record<string, unknown>): { niches: str
   }
   return { niches, duration };
 }
+
+/** Nettoie la réponse du modèle : guillemets, blocs de code, étiquettes « Script : ». */
+export function cleanScriptText(raw: string): string {
+  return raw
+    .replace(/```[a-z]*|```/gi, '')
+    .replace(/^\s*(nouveau\s+)?script\s*:\s*/i, '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join('\n')
+    .replace(/^["«“]+|["»”]+$/g, '')
+    .trim();
+}

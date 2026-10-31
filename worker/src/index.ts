@@ -1,7 +1,8 @@
 import { dispatchWorkflow } from './github';
 import { requireFirebaseUser, searchStockVideos } from './pexels';
 import { createRender, getRender, listDayRenders, parseRenderInput } from './renders';
-import { generateNicheScripts, AI_MODEL } from './scripts';
+import { generateNicheScripts, rewriteScript, AI_MODEL } from './scripts';
+import { resolveRenderSettings } from './renderSettings';
 import { parseScriptRequest } from './scriptParse';
 import {
   asRecord,
@@ -51,7 +52,7 @@ function corsHeaders(request: Request, env: Env): Record<string, string> {
   if (origin && allowedOrigins(env).includes(origin)) {
     headers['Access-Control-Allow-Origin'] = origin;
     headers['Access-Control-Allow-Headers'] = 'Authorization, Content-Type';
-    headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS';
+    headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, OPTIONS';
     headers['Access-Control-Max-Age'] = '86400';
   }
   return headers;
@@ -233,6 +234,71 @@ async function handleGenerateScripts(request: Request, env: Env): Promise<Respon
   return respond(request, env, { scripts, requested: parsed.duration, model: AI_MODEL });
 }
 
+async function handleRewriteScript(request: Request, env: Env): Promise<Response> {
+  await requireFirebaseUser(request, env);
+  const body = await readJson(request);
+  const script = typeof body.script === 'string' ? body.script.trim() : '';
+  if (script.length < 10 || script.length > 1500) throw new HttpError(400, 'invalid_param', 'Script invalide.');
+  const seconds = Number(body.targetSeconds);
+  if (!Number.isFinite(seconds) || seconds < 10 || seconds > 90) {
+    throw new HttpError(400, 'invalid_param', 'Durée cible invalide (10 à 90 s).');
+  }
+  const text = await rewriteScript(env, script, Math.round(seconds));
+  return respond(request, env, { script: text, targetSeconds: Math.round(seconds), model: AI_MODEL });
+}
+
+async function handleGetSettings(request: Request, env: Env): Promise<Response> {
+  const user = await requireFirebaseUser(request, env);
+  const row = await env.DB.prepare('SELECT settings FROM user_settings WHERE uid = ?').bind(user.uid).first<{ settings: string }>();
+  let raw: unknown = null;
+  try {
+    raw = row ? JSON.parse(row.settings) : null;
+  } catch {
+    raw = null;
+  }
+  return respond(request, env, { settings: resolveRenderSettings(raw) });
+}
+
+async function handlePutSettings(request: Request, env: Env): Promise<Response> {
+  const user = await requireFirebaseUser(request, env);
+  const body = await readJson(request);
+  const settings = resolveRenderSettings(body.settings);
+  await env.DB.prepare(
+    `INSERT INTO user_settings (uid, settings, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT(uid) DO UPDATE SET settings = excluded.settings, updated_at = excluded.updated_at`,
+  )
+    .bind(user.uid, JSON.stringify(settings), Date.now())
+    .run();
+  return respond(request, env, { settings });
+}
+
+const OVERRIDE_KEY = /^[A-Za-z0-9_-]{1,80}\|\d{4}-\d{2}-\d{2}\|\d{1,2}$/;
+
+async function handleGetOverrides(request: Request, env: Env): Promise<Response> {
+  const user = await requireFirebaseUser(request, env);
+  const rows = await env.DB.prepare('SELECT key, script FROM script_overrides WHERE uid = ? LIMIT 1000')
+    .bind(user.uid)
+    .all<{ key: string; script: string }>();
+  const overrides = Object.fromEntries((rows.results ?? []).map((r) => [r.key, r.script]));
+  return respond(request, env, { overrides });
+}
+
+async function handlePutOverride(request: Request, env: Env): Promise<Response> {
+  const user = await requireFirebaseUser(request, env);
+  const body = await readJson(request);
+  const key = typeof body.key === 'string' ? body.key : '';
+  const script = typeof body.script === 'string' ? body.script.trim() : '';
+  if (!OVERRIDE_KEY.test(key)) throw new HttpError(400, 'invalid_param', 'Clé de script invalide.');
+  if (script.length < 10 || script.length > 1500) throw new HttpError(400, 'invalid_param', 'Script invalide.');
+  await env.DB.prepare(
+    `INSERT INTO script_overrides (uid, key, script, updated_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT(uid, key) DO UPDATE SET script = excluded.script, updated_at = excluded.updated_at`,
+  )
+    .bind(user.uid, key, script, Date.now())
+    .run();
+  return respond(request, env, { ok: true });
+}
+
 async function handleRenderCreate(request: Request, env: Env): Promise<Response> {
   const user = await requireFirebaseUser(request, env);
   const body = await readJson(request);
@@ -269,6 +335,11 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (method === 'GET' && path === '/api/pexels/search') return handleStockSearch(request, env);
   if (method === 'POST' && path === '/api/render') return handleRenderCreate(request, env);
   if (method === 'POST' && path === '/api/generate-scripts') return handleGenerateScripts(request, env);
+  if (method === 'POST' && path === '/api/rewrite-script') return handleRewriteScript(request, env);
+  if (path === '/api/settings' && method === 'GET') return handleGetSettings(request, env);
+  if (path === '/api/settings' && method === 'PUT') return handlePutSettings(request, env);
+  if (path === '/api/script-overrides' && method === 'GET') return handleGetOverrides(request, env);
+  if (path === '/api/script-override' && method === 'PUT') return handlePutOverride(request, env);
   if (method === 'GET' && path === '/api/jobs') return handleRendersList(request, env);
   const jobMatch = path.match(/^\/api\/jobs\/([0-9a-f-]{36})$/);
   if (jobMatch && method === 'GET') return handleRenderGet(request, env, jobMatch[1]);

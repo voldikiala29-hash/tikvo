@@ -22,3 +22,15 @@ test('resolveBranding ignore les valeurs invalides', () => {
   assert.equal(b.showNiche, false);
   assert.equal(b.brandName, 'tikvo');
 });
+
+test('la durée suit la voix, sans réglage fixe', () => {
+  const p = composeProps({ ...base, audioSec: 12.4 });
+  assert.equal(p.totalDurationInFrames, Math.ceil((12.4 + 0.8) * 30));
+});
+
+test('format 16:9 : dimensions horizontales, style cinéma avec bandes', () => {
+  const p = composeProps({ ...base, settings: { aspect: '16:9', montage: 'cinema', clipsPerScript: 0 } });
+  assert.equal(p.width, 1920);
+  assert.equal(p.height, 1080);
+  assert.equal(p.montage?.letterbox, true);
+});
