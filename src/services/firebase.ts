@@ -6,7 +6,6 @@ import { getFirestore, doc, getDocFromServer, Firestore } from 'firebase/firesto
 const DEFAULT_CONFIG = {
   projectId: 'gen-lang-client-0420281505',
   appId: '1:1079644250638:web:6cde6910262c6cb98f525f',
-  apiKey: 'AIzaSyCxSK0oTuaLlXnTgbHAFil3ttHG0As2jhg',
   authDomain: 'gen-lang-client-0420281505.firebaseapp.com',
   firestoreDatabaseId: 'ai-studio-tikokvoldiuniver-46f5a527-94d6-419d-abf4-7d5f6ed4a676',
   storageBucket: 'gen-lang-client-0420281505.firebasestorage.app',
@@ -46,10 +45,12 @@ export const appId =
   rawFirebaseConfig?.appId ||
   DEFAULT_CONFIG.appId;
 
-export const apiKey =
+// Clé API : uniquement depuis le build (secret VITE_FIREBASE_API_KEY) ou la config applet locale.
+// Pas de repli en dur : une clé absente doit se voir, pas être masquée.
+export const apiKey: string =
   (env.VITE_FIREBASE_API_KEY as string) ||
   rawFirebaseConfig?.apiKey ||
-  DEFAULT_CONFIG.apiKey;
+  '';
 
 export const authDomain =
   (env.VITE_FIREBASE_AUTH_DOMAIN as string) ||
@@ -73,6 +74,14 @@ export const messagingSenderId =
 
 // Determine if valid Firebase credentials exist
 export const isFirebaseConfigured: boolean = Boolean(apiKey && projectId && apiKey.trim() !== '');
+
+// DIAGNOSTIC TEMPORAIRE : confirme que le build a bien reçu la configuration (sans révéler la clé).
+console.info(
+  '[Firebase config]',
+  'apiKey:', apiKey ? `présente (${apiKey.length} car., commence par "${apiKey.slice(0, 4)}")` : 'MANQUANTE',
+  '| projectId:', projectId || 'MANQUANT',
+  '| authDomain:', authDomain || 'MANQUANT',
+);
 
 let app: FirebaseApp | null = null;
 let db: Firestore | null = null;
