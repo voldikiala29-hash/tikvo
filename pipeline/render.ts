@@ -85,6 +85,10 @@ async function main(): Promise<void> {
   await mkdir(path.join(publicDir, 'clips'), { recursive: true });
   await mkdir(path.join(publicDir, 'audio'), { recursive: true });
 
+  // Durées par étape, lues dans les journaux GitHub Actions pour cibler les lenteurs.
+  const t0 = Date.now();
+  const lap = (label: string) => console.log(`[temps] ${label} : ${((Date.now() - t0) / 1000).toFixed(1)} s depuis le début`);
+
   // 1. Voix off : c'est elle qui fixe la durée de la vidéo.
   await reporter.report('Synthèse de la voix off (Edge TTS)…', 5, true);
   // Voix et style propres à la niche, sauf choix explicite pour ce rendu.
@@ -102,6 +106,8 @@ async function main(): Promise<void> {
     throw new Error(`La voix dure ${Math.round(voice.audioSec)} s : raccourcis le script (maximum ${MAX_VIDEO_SECONDS - 1} s).`);
   }
   const totalSec = voice.audioSec + TAIL_SECONDS;
+
+  lap('voix off');
 
   // 2. Plans : nombre choisi par l'utilisateur, ou automatique selon la durée.
   const need = clipCountFor(totalSec, settings.clipsPerScript);
@@ -163,6 +169,7 @@ async function main(): Promise<void> {
   });
 
   // 4. Contrôle du fichier produit
+  lap('montage terminé');
   await reporter.report('Contrôle de la vidéo…', 91, true);
   const info = await probe(outFile);
   if (info.videoCodec !== 'h264') throw new Error(`Codec inattendu : ${info.videoCodec}`);

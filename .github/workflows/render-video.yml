@@ -32,6 +32,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Dès le départ, la carte du site quitte « En file d’attente » : le serveur de rendu est lancé.
+      - name: Signale le démarrage
+        run: |
+          curl -sS -m 10 -X POST "$API_URL/internal/jobs/$JOB_ID" \
+            -H "Authorization: Bearer $RENDER_SECRET" -H "Content-Type: application/json" \
+            -d '{"status":"rendering","step":"Préparation du serveur de rendu…","progress":2}' || true
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -42,11 +49,16 @@ jobs:
 
       - name: Dépendances système (ffmpeg, polices) si absentes
         run: |
-          if command -v ffmpeg >/dev/null 2>&1 && fc-list | grep -qi dejavu; then
-            echo "ffmpeg et polices déjà présents"
-          else
+          # N'installe que ce qui manque (apt-get update est l'étape la plus lente).
+          MISSING=""
+          for pkg in ffmpeg fonts-dejavu-core fonts-liberation; do
+            dpkg -s "$pkg" >/dev/null 2>&1 || MISSING="$MISSING $pkg"
+          done
+          if [ -n "$MISSING" ]; then
             sudo apt-get update -y
-            sudo apt-get install -y ffmpeg fonts-dejavu-core fonts-liberation
+            sudo apt-get install -y --no-install-recommends $MISSING
+          else
+            echo "ffmpeg et polices déjà présents"
           fi
 
       - name: "Dépendances Python (voix off : Edge TTS, repli gTTS)"
@@ -58,12 +70,14 @@ jobs:
       # Pas de lockfile : node_modules est gardé en cache tant que package.json ne change pas.
       # Inclut le navigateur Remotion s'il est installé dans node_modules.
       - name: Cache node_modules
+        id: nodemods
         uses: actions/cache@v4
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-${{ hashFiles('package.json') }}
 
       - name: Dépendances Node
+        if: steps.nodemods.outputs.cache-hit != 'true'
         run: npm ci --legacy-peer-deps || npm install --legacy-peer-deps
 
       - name: Vérifie que le rendu peut démarrer
