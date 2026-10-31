@@ -1,7 +1,7 @@
 // Génère un programme de vidéos à partir de templates par niche.
 // Aucun appel à une IA : les textes sont des modèles remplis par sujet, déterministes et rapides.
 
-import { clipQueryFor } from './clipQueries';
+import { clipQueryFor } from './clipQueries.ts';
 
 export const NICHE_CATALOG = [
   { id: 'mode', label: 'Mode', emoji: '👗' },
@@ -160,6 +160,12 @@ function tomorrow(): Date {
   d.setHours(12, 0, 0, 0);
   d.setDate(d.getDate() + 1);
   return d;
+}
+
+/** Une vidéo neuve pour une niche donnée (changement de niche sur une carte). `seed` varie le sujet. */
+export function videoForNiche(niche: NicheId, time: string, seed: number): ProgramVideo {
+  const k = Math.abs(Math.floor(seed));
+  return buildVideo(niche, k, k, time);
 }
 
 function buildVideo(niche: NicheId, k: number, n: number, time: string): ProgramVideo {

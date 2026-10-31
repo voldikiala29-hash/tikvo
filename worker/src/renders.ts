@@ -17,6 +17,8 @@ export interface RenderInput {
   day: string;
   videoKey: string;
   settings: RenderSettings;
+  /** 0 = rendu d'origine ; autre valeur = recréation avec d'autres clips. */
+  variant: number;
 }
 
 export interface RenderView {
@@ -72,6 +74,7 @@ export function parseRenderInput(body: Record<string, unknown>): RenderInput {
     day,
     videoKey,
     settings: resolveRenderSettings(body.settings),
+    variant: Number.isInteger(body.variant) ? Math.min(999, Math.max(0, Number(body.variant))) : 0,
   };
 }
 
@@ -150,6 +153,7 @@ export async function createRender(
     day: input.day,
     videoKey: input.videoKey,
     settings: input.settings,
+    variant: input.variant,
   };
   await env.DB.prepare(
     `INSERT INTO jobs (id, open_id, status, step, progress, params, created_at, updated_at)

@@ -154,6 +154,9 @@ export interface RenderRequest {
   /** Script final (éventuellement modifié) : c'est lui qui fixe la durée. */
   script: string;
   settings: RenderSettings;
+  /** Recréation : ignore le rendu existant et prend d'autres clips. */
+  force?: boolean;
+  variant?: number;
 }
 
 /** Appel authentifié (jeton Firebase de l'utilisateur) vers le Worker. */

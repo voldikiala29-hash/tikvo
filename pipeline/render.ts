@@ -112,6 +112,7 @@ async function main(): Promise<void> {
     ids: params.pexelsIds || [],
     queries: buildQueries(params.niche.id, params.keywords || []),
     key: pixabayKey,
+    seed: params.variant ?? 0,
   });
   if (candidates.length < Math.min(MIN_CLIPS, need)) {
     throw new Error(`Pixabay n'a trouvé que ${candidates.length} clip(s) vertical(aux) pour ces mots-clés.`);

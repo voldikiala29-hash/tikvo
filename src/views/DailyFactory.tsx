@@ -18,7 +18,8 @@ import {
   searchPexels,
 } from '../services/backendApi';
 import { StoredProgram, UserProfile, loadProgram, saveGeneratedProgram } from '../services/factoryStore';
-import { NICHE_CATALOG, ProgramVideo, generateProgram, toLocalISODate } from '../services/programGenerator';
+import { NICHE_CATALOG, ProgramDay, ProgramVideo, generateProgram, toLocalISODate, type NicheId } from '../services/programGenerator';
+import { carryOverrides, nichesOf, totalOf, withNicheForVideo, withProgramNiches } from '../services/programEdit';
 import { firstLine, scriptFromAI } from '../services/scriptText';
 import { VOICES, VOICE_STYLES, resolveVoice } from '../video-engine/voices';
 import {
@@ -125,6 +126,70 @@ const SettingsPanel: React.FC<{ settings: RenderSettings; onChange: (next: Rende
 };
 
 /** Aperçu vertical réel (clip Pixabay via le Worker). Décalé pour rester sous la limite du fournisseur. */
+const NichePanel: React.FC<{ niches: NicheId[]; disabled: boolean; onChange: (next: NicheId[]) => void }> = ({
+  niches,
+  disabled,
+  onChange,
+}) => {
+  const free = NICHE_CATALOG.filter((n) => !niches.includes(n.id));
+  return (
+    <section className="rounded-2xl bg-[#12121A] border border-white/5 p-4 space-y-3">
+      <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Niches du programme</p>
+      <div className="flex flex-wrap gap-2">
+        {niches.map((id) => (
+          <span
+            key={id}
+            className="inline-flex items-center gap-1 pl-1 pr-1 py-0.5 rounded-full bg-[#00FFC6]/10 border border-[#00FFC6]/30"
+          >
+            <select
+              value={id}
+              disabled={disabled}
+              onChange={(e) => onChange(niches.map((n) => (n === id ? (e.target.value as NicheId) : n)))}
+              className="bg-transparent text-[#00FFC6] text-xs font-bold focus:outline-none disabled:opacity-40"
+            >
+              <option value={id} className="bg-[#12121A]">
+                {nicheLabel(id)}
+              </option>
+              {free.map((n) => (
+                <option key={n.id} value={n.id} className="bg-[#12121A] text-white">
+                  {n.label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              aria-label={`Retirer ${nicheLabel(id)}`}
+              disabled={disabled || niches.length <= 1}
+              onClick={() => onChange(niches.filter((n) => n !== id))}
+              className="px-1.5 text-[#00FFC6]/70 hover:text-white text-sm leading-none disabled:opacity-30"
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        {niches.length < 3 && (
+          <select
+            value=""
+            disabled={disabled || free.length === 0}
+            onChange={(e) => e.target.value && onChange([...niches, e.target.value as NicheId])}
+            className="rounded-full bg-black/40 border border-white/10 px-3 py-1 text-xs text-gray-300 focus:outline-none disabled:opacity-40"
+          >
+            <option value="">+ Ajouter une niche</option>
+            {free.map((n) => (
+              <option key={n.id} value={n.id}>
+                {n.label}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+      <p className="text-[11px] text-gray-500">
+        Change une niche ici : les vidéos à partir de demain sont recréées. Aujourd’hui et les scripts déjà validés restent.
+      </p>
+    </section>
+  );
+};
+
 const ClipPreview: React.FC<{ query: string; delayMs: number }> = ({ query, delayMs }) => {
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<
@@ -207,6 +272,7 @@ interface DailyVideoCardProps {
   renders: RenderJob[];
   onRender: (job: RenderJob) => void;
   onScriptSaved: (key: string, script: string) => void;
+  onNicheChange: (niche: NicheId) => void;
 }
 
 const DailyVideoCard: React.FC<DailyVideoCardProps> = ({
@@ -219,6 +285,7 @@ const DailyVideoCard: React.FC<DailyVideoCardProps> = ({
   renders,
   onRender,
   onScriptSaved,
+  onNicheChange,
 }) => {
   const videoKey = `${date}-${index}`;
   const overrideKey = `${programId}|${date}|${index}`;
@@ -230,6 +297,11 @@ const DailyVideoCard: React.FC<DailyVideoCardProps> = ({
   const nicheVoice = resolveVoice(video.niche);
   const [voiceId, setVoiceId] = useState(nicheVoice.voice);
   const [styleId, setStyleId] = useState(nicheVoice.style);
+  useEffect(() => {
+    const v = resolveVoice(video.niche);
+    setVoiceId(v.voice);
+    setStyleId(v.style);
+  }, [video.niche]);
 
   // Le script affiché suit la version enregistrée (par exemple après un rechargement).
   useEffect(() => setScript(savedScript), [savedScript]);
@@ -265,7 +337,7 @@ const DailyVideoCard: React.FC<DailyVideoCardProps> = ({
     }
   };
 
-  const generate = async () => {
+  const generate = async (recreate = false) => {
     setBusy(true);
     setError(null);
     try {
@@ -279,6 +351,8 @@ const DailyVideoCard: React.FC<DailyVideoCardProps> = ({
         day: date,
         videoKey,
         settings: { ...settings, voice: voiceId, voiceStyle: styleId },
+        force: recreate,
+        variant: recreate ? 1 + Math.floor(Math.random() * 998) : 0,
       });
       onRender(created);
     } catch (err) {
@@ -314,6 +388,20 @@ const DailyVideoCard: React.FC<DailyVideoCardProps> = ({
           </div>
           <h3 className="text-sm font-bold text-white">{video.title}</h3>
           <p className="text-[11px] text-gray-400">Clips : {video.pexelsQuery}</p>
+          <label className="flex items-center gap-2 text-[11px] text-gray-400">
+            <span>Niche</span>
+            <select
+              value={video.niche}
+              onChange={(e) => onNicheChange(e.target.value as NicheId)}
+              className="rounded-lg bg-black/40 border border-white/10 px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-[#00FFC6]/50"
+            >
+              {NICHE_CATALOG.map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.label}
+                </option>
+              ))}
+            </select>
+          </label>
 
           <label className="block">
             <span className="flex items-center justify-between text-[11px] text-gray-400 mb-1">
@@ -409,11 +497,22 @@ const DailyVideoCard: React.FC<DailyVideoCardProps> = ({
           {!isActive(job) && !rendered && (
             <button
               type="button"
-              onClick={generate}
+              onClick={() => void generate()}
               disabled={busy || script.trim().length < 10}
               className="px-3 py-1.5 rounded-lg bg-white text-black text-xs font-extrabold disabled:opacity-50"
             >
               {busy ? 'Lancement…' : job?.status === 'failed' ? 'Réessayer' : 'Générer la vidéo'}
+            </button>
+          )}
+
+          {rendered && (
+            <button
+              type="button"
+              onClick={() => void generate(true)}
+              disabled={busy}
+              className="px-3 py-1.5 rounded-lg border border-white/15 text-white text-xs font-bold hover:bg-white/10 disabled:opacity-40"
+            >
+              {busy ? 'Lancement…' : 'Recréer la vidéo'}
             </button>
           )}
 
@@ -438,6 +537,7 @@ export const DailyFactory: React.FC<DailyFactoryProps> = ({ uid, profile, onView
   const [settings, setSettings] = useState<RenderSettings>(() => readLocalSettings() ?? DEFAULT_RENDER_SETTINGS);
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [overridesLoaded, setOverridesLoaded] = useState(false);
+  const [changing, setChanging] = useState(false);
   const [scriptStatus, setScriptStatus] = useState<'idle' | 'generating' | 'ai' | 'model'>('idle');
   const attempted = useRef<string | null>(null);
 
@@ -543,6 +643,50 @@ export const DailyFactory: React.FC<DailyFactoryProps> = ({ uid, profile, onView
     setOverrides((prev) => ({ ...prev, [key]: script }));
   }, []);
 
+  // Modifier le programme crée un nouveau programme (les règles interdisent la mise à jour) :
+  // les scripts validés des vidéos inchangées sont recopiés vers le nouvel identifiant.
+  const commitProgram = async (nextDays: ProgramDay[], nextNiches: NicheId[]) => {
+    if (!program) return;
+    if (nextNiches.length > 3) {
+      setError('Un programme accepte 3 niches au maximum. Retire d’abord une niche déjà utilisée.');
+      return;
+    }
+    setChanging(true);
+    setError(null);
+    try {
+      const totalVideos = totalOf(nextDays);
+      const newId = await saveGeneratedProgram(uid, { niches: nextNiches, duration: program.duration, days: nextDays, totalVideos });
+      const carried = carryOverrides(program.id, newId, overrides, program.days, nextDays);
+      for (const [key, script] of Object.entries(carried)) {
+        await saveScriptOverride(key, script);
+      }
+      attempted.current = null;
+      setOverrides(carried);
+      setProgram({ ...program, id: newId, niches: nextNiches, days: nextDays, totalVideos });
+    } catch (err) {
+      setError(errorText(err, 'Modification du programme impossible.'));
+    } finally {
+      setChanging(false);
+    }
+  };
+
+  // Une vidéo change de niche (aujourd’hui ou plus tard) : son modèle de script est remplacé.
+  const changeVideoNiche = (date: string, index: number, niche: NicheId) => {
+    if (!program) return;
+    const current = program.days.find((d) => d.date === date)?.videos[index]?.niche;
+    if (current === niche) return;
+    const nextDays = withNicheForVideo(program.days, date, index, niche, Math.floor(Math.random() * 1000));
+    void commitProgram(nextDays, nichesOf(nextDays));
+  };
+
+  // Niches du programme : valables à partir de demain.
+  const changeProgramNiches = (selected: NicheId[]) => {
+    if (!program || selected.length === 0) return;
+    const todayIso = toLocalISODate(new Date());
+    const nextDays = withProgramNiches(program.days, selected, program.duration, todayIso);
+    void commitProgram(nextDays, nichesOf(nextDays));
+  };
+
   // Interroge toutes les 5 s les rendus en cours.
   const activeIds = renders
     .filter((r) => r.status === 'queued' || r.status === 'rendering')
@@ -630,6 +774,11 @@ export const DailyFactory: React.FC<DailyFactoryProps> = ({ uid, profile, onView
           Programme complet
         </button>
       </div>
+      <NichePanel
+        niches={nichesOf(program.days)}
+        disabled={changing}
+        onChange={changeProgramNiches}
+      />
       <SettingsPanel settings={settings} onChange={changeSettings} />
       <InspirationPanel />
       {scriptStatus === 'generating' && (
@@ -653,6 +802,7 @@ export const DailyFactory: React.FC<DailyFactoryProps> = ({ uid, profile, onView
             renders={renders}
             onRender={upsertRender}
             onScriptSaved={onScriptSaved}
+            onNicheChange={(niche) => changeVideoNiche(todayDay.date, i, niche)}
           />
         );
       })}
