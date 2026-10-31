@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Download, Film } from 'lucide-react';
 import { CopyScriptButton } from '../components/CopyScriptButton';
+import { MediaPanel } from '../components/MediaPanel';
 import { InspirationPanel } from '../components/InspirationPanel';
 import {
   ApiError,
@@ -851,6 +852,7 @@ export const DailyFactory: React.FC<DailyFactoryProps> = ({ uid, profile, onView
         onChange={changeProgramNiches}
       />
       <SettingsPanel settings={settings} onChange={changeSettings} />
+      <MediaPanel />
       <InspirationPanel />
       {scriptStatus === 'generating' && (
         <p className="text-xs text-[#00FFC6]">Écriture des 3 scripts du jour par Llama…</p>

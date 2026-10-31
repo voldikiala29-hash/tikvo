@@ -27,3 +27,10 @@ enabled = true
 
 [ai]
 binding = "AI"
+
+# Photos et vidéos personnelles (R2). Activer R2 dans le tableau de bord Cloudflare, créer le bucket
+# « tikvo-media », puis retirer le # des 3 lignes ci-dessous et redéployer.
+# [[r2_buckets]]
+# binding = "MEDIA"
+# bucket_name = "tikvo-media"
+

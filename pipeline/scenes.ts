@@ -13,6 +13,7 @@ export interface SceneClip {
   src: string;
   durationSec: number;
   credit?: string;
+  kind?: 'video' | 'image';
 }
 
 export const MAX_SCENES = 8;

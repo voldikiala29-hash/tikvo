@@ -11,6 +11,8 @@ export interface VideoClip {
   thumbnailUrl?: string;
   /** Durée de la vidéo source en frames (0 si inconnue). */
   durationInFrames: number;
+  /** Photo (affichée fixe, avec un léger zoom) ou vidéo (par défaut). */
+  kind?: 'video' | 'image';
   credit?: string;
 }
 

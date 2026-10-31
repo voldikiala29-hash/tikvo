@@ -1,7 +1,10 @@
 // Recherche d'un plan par phrase (Pixabay), en parallèle. Repli sur la niche pour les phrases sans plan.
+import path from 'node:path';
 import { collectClips, searchPixabay, toCandidate } from './stock.ts';
 import type { ClipCandidate } from './stock.ts';
 import { pickSceneHit } from './scenes.ts';
+import type { SceneClip } from './scenes.ts';
+import { probe, type WorkerApi } from './lib.ts';
 
 export async function findSceneClips(options: {
   queries: (string | null)[];
@@ -50,4 +53,43 @@ export async function findSceneClips(options: {
     });
   }
   return picks;
+}
+
+/**
+ * Photos et vidéos personnelles choisies pour certaines phrases (une seule utilisation par média).
+ * Renvoie, pour chaque phrase, le plan personnel ou null (la phrase ira chercher sur Pixabay).
+ */
+export async function userSceneClips(
+  api: WorkerApi,
+  mediaIds: (string | null)[],
+  media: { id: string; kind: 'image' | 'video'; ext: string }[],
+  publicDir: string,
+): Promise<(SceneClip | null)[]> {
+  const used = new Set<string>();
+  const out: (SceneClip | null)[] = [];
+  for (let i = 0; i < mediaIds.length; i++) {
+    const id = mediaIds[i];
+    const item = id ? media.find((m) => m.id === id) : undefined;
+    if (!id || !item || used.has(id)) {
+      out.push(null);
+      continue;
+    }
+    used.add(id);
+    const rel = `clips/own-${i + 1}.${item.ext}`;
+    const dest = path.join(publicDir, rel);
+    try {
+      await api.download(id, dest);
+      if (item.kind === 'image') {
+        out.push({ id: `own-${id}`, src: rel, durationSec: 1, kind: 'image' });
+        continue;
+      }
+      const info = await probe(dest);
+      if (info.duration < 1) throw new Error('vidéo trop courte');
+      out.push({ id: `own-${id}`, src: rel, durationSec: info.duration, kind: 'video' });
+    } catch (err) {
+      console.warn(`Média personnel ${id} ignoré : ${err instanceof Error ? err.message : err}`);
+      out.push(null);
+    }
+  }
+  return out;
 }
