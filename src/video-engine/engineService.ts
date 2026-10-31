@@ -1,5 +1,5 @@
-// Moteur vidéo côté navigateur : prépare l'aperçu, et délègue le vrai rendu et la publication au serveur.
-import { backend, JobView, PublishOptions } from '../services/backendApi';
+// Moteur vidéo côté navigateur : prépare l'aperçu, et délègue le vrai rendu au serveur.
+import { backend, JobView } from '../services/backendApi';
 import { fetchPreviewClips } from './pexelsService';
 import { estimateWords, FPS, hookFramesFor } from './timeline';
 import type { ViralTemplateProps, VideoClip, VideoGenerationRequest } from './types';
@@ -15,7 +15,6 @@ export interface VideoGenerationResult {
 
 const POLL_MS = 3000;
 const RENDER_TIMEOUT_MS = 15 * 60_000;
-const PUBLISH_TIMEOUT_MS = 25 * 60_000;
 const PREVIEW_HOOK_FRAMES = 90;
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -101,20 +100,6 @@ class VideoEngineService {
     };
   }
 
-  /** Publication réelle (immédiate ou programmée) d'une vidéo déjà rendue. */
-  async publish(
-    jobId: string,
-    options: PublishOptions,
-    onTick?: (job: JobView) => void,
-  ): Promise<JobView> {
-    await backend.publishJob(jobId, options);
-    return waitForJob(
-      jobId,
-      (j) => j.status === 'published' || j.status === 'scheduled' || (j.status === 'rendered' && Boolean(j.publish.error)),
-      onTick,
-      PUBLISH_TIMEOUT_MS,
-    );
-  }
 }
 
 export const videoEngineService = new VideoEngineService();

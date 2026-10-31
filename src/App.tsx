@@ -2,19 +2,14 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Topbar } from './components/Topbar';
 import { ViralIdeasModal } from './components/ViralIdeasModal';
-import { ConnectTikTokModal } from './components/ConnectTikTokModal';
 import { CustomNicheModal } from './components/CustomNicheModal';
 import { FirebaseModal } from './components/FirebaseModal';
 import { DashboardView } from './views/DashboardView';
 import { RadarViralView } from './views/RadarViralView';
 import { ContentFactoryView } from './views/ContentFactoryView';
-import { AccountsView } from './views/AccountsView';
-import { CalendarView } from './views/CalendarView';
-import { MonetizationView } from './views/MonetizationView';
 import { SettingsView } from './views/SettingsView';
 import { INITIAL_NICHES, generate10ViralIdeas } from './data/nichesData';
 import { NicheData, NicheId, ScheduledPost, ViralIdea } from './types/tiktok';
-import { backend, consumeTikTokRedirect, forgetSession, getSessionToken, ApiError } from './services/backendApi';
 import { FirebaseProvider, useFirebase } from './contexts/FirebaseContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -59,7 +54,7 @@ function TikvoDashboard() {
   // Active Main Navigation View (derived and synced with HashRouter)
   const [currentView, setCurrentView] = useState<string>(() => {
     const hashRoute = window.location.hash.replace(/^#\/?/, '').split('?')[0].split('/')[0];
-    return ['dashboard', 'radar', 'factory', 'accounts', 'calendar', 'monetization', 'settings'].includes(hashRoute)
+    return ['dashboard', 'radar', 'factory', 'settings'].includes(hashRoute)
       ? hashRoute
       : 'dashboard';
   });
@@ -67,7 +62,7 @@ function TikvoDashboard() {
   // Sync route with currentView
   useEffect(() => {
     const rawPath = location.pathname.replace(/^\//, '').split('/')[0];
-    if (['dashboard', 'radar', 'factory', 'accounts', 'calendar', 'monetization', 'settings'].includes(rawPath)) {
+    if (['dashboard', 'radar', 'factory', 'settings'].includes(rawPath)) {
       setCurrentView(rawPath);
     } else if (!rawPath) {
       setCurrentView('dashboard');
@@ -83,38 +78,8 @@ function TikvoDashboard() {
     navigate(view === 'dashboard' ? '/' : `/${view}`);
   };
 
-  // TikTok API Connection State
-  // Ordre important : on lit d'abord le retour de TikTok (qui crée la session), puis l'état de connexion.
-  const [ttRedirectError, setTtRedirectError] = useState<string | null>(() => consumeTikTokRedirect());
-  const [isTikTokConnected, setIsTikTokConnected] = useState<boolean>(() => Boolean(getSessionToken()));
-  const [tikTokHandle, setTikTokHandle] = useState<string>('');
-
-  useEffect(() => {
-    if (!isTikTokConnected) {
-      setTikTokHandle('');
-      return;
-    }
-    let cancelled = false;
-    backend
-      .me()
-      .then((me) => {
-        if (!cancelled) setTikTokHandle(me.username ? `@${me.username}` : me.displayName);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        if (err instanceof ApiError && err.status === 401) {
-          forgetSession();
-          setIsTikTokConnected(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [isTikTokConnected]);
-
   // Modals state
   const [isViralIdeasModalOpen, setIsViralIdeasModalOpen] = useState<boolean>(false);
-  const [isConnectModalOpen, setIsConnectModalOpen] = useState<boolean>(false);
   const [isCustomNicheModalOpen, setIsCustomNicheModalOpen] = useState<boolean>(false);
 
   // Scheduled posts storage (localStorage fallback)
@@ -260,9 +225,6 @@ function TikvoDashboard() {
         setSelectedNiche={setSelectedNiche}
         niches={niches}
         onOpenCustomNicheModal={() => setIsCustomNicheModalOpen(true)}
-        isTikTokConnected={isTikTokConnected}
-        onOpenConnectModal={() => setIsConnectModalOpen(true)}
-        tikTokHandle={tikTokHandle}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
       />
@@ -276,22 +238,11 @@ function TikvoDashboard() {
           niches={niches}
           onOpenCustomNicheModal={() => setIsCustomNicheModalOpen(true)}
           onGenerate10Ideas={handleOpen10Ideas}
-          isTikTokConnected={isTikTokConnected}
-          onOpenConnectModal={() => setIsConnectModalOpen(true)}
           onOpenMenu={() => setIsSidebarOpen(true)}
         />
 
         {/* 3. Dynamic Views */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 lg:ml-64 overflow-y-auto">
-          {ttRedirectError && (
-            <div className="mb-6 p-4 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-200 text-xs sm:text-sm flex items-start justify-between gap-4">
-              <span>Connexion TikTok : {ttRedirectError}</span>
-              <button onClick={() => setTtRedirectError(null)} className="text-red-300 hover:text-white font-bold">
-                Fermer
-              </button>
-            </div>
-          )}
-
           {/* Alerte si la configuration Firebase est manquante */}
           {!isFirebaseConfigured && (
             <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 flex items-center justify-between text-amber-200 text-xs sm:text-sm shadow-lg shadow-amber-950/20">
@@ -338,31 +289,9 @@ function TikvoDashboard() {
             />
           )}
 
-          {currentView === 'accounts' && (
-            <AccountsView
-              niche={currentNicheData}
-              onOpenConnectModal={() => setIsConnectModalOpen(true)}
-            />
-          )}
-
-          {currentView === 'calendar' && (
-            <CalendarView
-              niche={currentNicheData}
-              scheduledPosts={scheduledPosts}
-              onAddPost={handleSchedulePost}
-              onNavigateToFactory={() => handleNavigateView('factory')}
-            />
-          )}
-
-          {currentView === 'monetization' && (
-            <MonetizationView niche={currentNicheData} />
-          )}
-
           {currentView === 'settings' && (
             <SettingsView
               niche={currentNicheData}
-              isTikTokConnected={isTikTokConnected}
-              onOpenConnectModal={() => setIsConnectModalOpen(true)}
             />
           )}
         </main>
@@ -375,13 +304,6 @@ function TikvoDashboard() {
         niche={currentNicheData}
         ideas={viralIdeas}
         onSelectIdeaForFactory={handleSelectIdeaForFactory}
-      />
-
-      <ConnectTikTokModal
-        isOpen={isConnectModalOpen}
-        onClose={() => setIsConnectModalOpen(false)}
-        isConnected={isTikTokConnected}
-        onConnectionChange={(connected) => setIsTikTokConnected(connected)}
       />
 
       <CustomNicheModal

@@ -1,6 +1,6 @@
 // Clips d'aperçu : vrais résultats Pexels via le Worker (clé API côté serveur).
 // Sans connexion ou sans résultat, l'aperçu affiche simplement un fond uni : aucun clip factice.
-import { backend, getSessionToken, isApiConfigured, PexelsVideoView } from '../services/backendApi';
+import { backend, isApiConfigured, PexelsVideoView } from '../services/backendApi';
 import { buildQueries } from './queries';
 import type { VideoClip } from './types';
 
@@ -17,7 +17,7 @@ export function pickPreviewFile(files: PexelsVideoView['files']): PexelsVideoVie
 }
 
 export async function fetchPreviewClips(nicheId: string, keywords: string[] = []): Promise<VideoClip[]> {
-  if (!isApiConfigured() || !getSessionToken()) return [];
+  if (!isApiConfigured()) return [];
   const query = buildQueries(nicheId, keywords)[0];
   try {
     const { videos } = await backend.pexelsSearch(query, 6);
