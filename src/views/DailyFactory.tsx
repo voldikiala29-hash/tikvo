@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Download, Film } from 'lucide-react';
 import { CopyScriptButton } from '../components/CopyScriptButton';
-import { PexelsPreviewItem, searchPexels } from '../services/backendApi';
+import { ApiError, PexelsPreviewItem, searchPexels } from '../services/backendApi';
 import { StoredProgram, UserProfile, loadProgram, saveGeneratedProgram } from '../services/factoryStore';
 import { NICHE_CATALOG, ProgramVideo, generateProgram, toLocalISODate } from '../services/programGenerator';
 
@@ -15,31 +15,43 @@ const nicheLabel = (id: string) => NICHE_CATALOG.find((n) => n.id === id)?.label
 const formatDay = (iso: string) =>
   new Date(`${iso}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 
-/** Aperçu vertical réel (Pexels via le Worker). Repli sur un dégradé si rien ne s'affiche. */
-const PexelsPreview: React.FC<{ query: string }> = ({ query }) => {
-  const [state, setState] = useState<{ status: 'loading' | 'ok' | 'empty' | 'error'; video?: PexelsPreviewItem; message?: string }>({
-    status: 'loading',
-  });
+type PreviewState =
+  | { status: 'loading' }
+  | { status: 'ok'; video: PexelsPreviewItem }
+  | { status: 'empty' }
+  | { status: 'rate_limited'; message: string }
+  | { status: 'error'; message: string };
+
+/** Aperçu vertical réel (Pexels via le Worker). Décalé pour rester sous la limite Pixabay. */
+const PexelsPreview: React.FC<{ query: string; delayMs: number }> = ({ query, delayMs }) => {
+  const [attempt, setAttempt] = useState(0);
+  const [state, setState] = useState<PreviewState>({ status: 'loading' });
 
   useEffect(() => {
     let cancelled = false;
     setState({ status: 'loading' });
-    searchPexels(query, 1)
-      .then((videos) => {
-        if (cancelled) return;
-        setState(videos[0] ? { status: 'ok', video: videos[0] } : { status: 'empty' });
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setState({ status: 'error', message: err instanceof Error ? err.message : 'Aperçu indisponible.' });
-      });
+    const timer = window.setTimeout(() => {
+      searchPexels(query, 1)
+        .then((videos) => {
+          if (cancelled) return;
+          setState(videos[0] ? { status: 'ok', video: videos[0] } : { status: 'empty' });
+        })
+        .catch((err: unknown) => {
+          if (cancelled) return;
+          if (err instanceof ApiError && err.code === 'PIXABAY_429') {
+            setState({ status: 'rate_limited', message: err.message });
+          } else {
+            setState({ status: 'error', message: err instanceof Error ? err.message : 'Aperçu indisponible.' });
+          }
+        });
+    }, delayMs);
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
-  }, [query]);
+  }, [query, delayMs, attempt]);
 
-  const frame = 'relative w-full aspect-[9/16] rounded-xl overflow-hidden bg-gradient-to-br from-pink-600 via-purple-700 to-indigo-900';
-
-  if (state.status === 'ok' && state.video) {
+  if (state.status === 'ok') {
     return (
       <video
         key={state.video.id}
@@ -55,15 +67,31 @@ const PexelsPreview: React.FC<{ query: string }> = ({ query }) => {
   }
 
   return (
-    <div className={`${frame} flex flex-col items-center justify-center gap-2 text-white/80 p-3 text-center`}>
-      {state.status === 'loading' ? (
-        <div className="w-6 h-6 rounded-full border-2 border-white/60 border-t-transparent animate-spin" />
-      ) : (
+    <div className="relative w-full aspect-[9/16] rounded-xl overflow-hidden bg-gradient-to-br from-pink-600 via-purple-700 to-indigo-900 flex flex-col items-center justify-center gap-2 text-white/80 p-3 text-center">
+      {state.status === 'loading' && <div className="w-6 h-6 rounded-full border-2 border-white/60 border-t-transparent animate-spin" />}
+      {state.status === 'empty' && (
         <>
           <Film size={28} />
-          <span className="text-[10px] leading-snug">
-            {state.status === 'empty' ? 'Aucun aperçu trouvé' : state.message || 'Aperçu indisponible'}
-          </span>
+          <span className="text-[10px] leading-snug">Aucun aperçu trouvé</span>
+        </>
+      )}
+      {state.status === 'error' && (
+        <>
+          <Film size={28} />
+          <span className="text-[10px] leading-snug">{state.message}</span>
+        </>
+      )}
+      {state.status === 'rate_limited' && (
+        <>
+          <Film size={28} />
+          <span className="text-[10px] leading-snug">{state.message}</span>
+          <button
+            type="button"
+            onClick={() => setAttempt((a) => a + 1)}
+            className="mt-1 px-3 py-1 rounded-lg bg-white/20 hover:bg-white/30 text-white text-[11px] font-bold"
+          >
+            Réessayer
+          </button>
         </>
       )}
     </div>
@@ -92,7 +120,7 @@ const DailyVideoCard: React.FC<{ video: ProgramVideo; date: string; index: numbe
 
   return (
     <article className="rounded-2xl bg-[#12121A] border border-white/5 p-4 grid gap-4 md:grid-cols-[160px_1fr]">
-      <PexelsPreview query={video.pexelsQuery} />
+      <PexelsPreview query={video.pexelsQuery} delayMs={index * 500} />
       <div className="min-w-0 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <span className="text-[11px] font-bold text-[#00FFC6] bg-[#00FFC6]/10 px-2 py-0.5 rounded">
