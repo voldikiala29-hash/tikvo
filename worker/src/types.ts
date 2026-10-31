@@ -16,6 +16,7 @@ export interface Env {
   GH_DISPATCH_TOKEN?: string;
   RENDER_SECRET?: string;
   PEXELS_API_KEY?: string;
+  PIXABAY_API_KEY?: string;
   FIREBASE_API_KEY?: string;
 }
 
