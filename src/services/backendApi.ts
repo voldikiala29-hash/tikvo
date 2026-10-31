@@ -123,6 +123,77 @@ export async function searchPexels(query: string, perPage = 3): Promise<PexelsPr
   return data.videos ?? [];
 }
 
+// ---------------------------------------------------------------- rendus MP4
+
+export type RenderDuration = 15 | 30 | 60;
+export type RenderStatus = 'queued' | 'rendering' | 'rendered' | 'failed';
+
+export interface RenderJob {
+  id: string;
+  status: RenderStatus;
+  step: string;
+  progress: number;
+  day: string | null;
+  videoKey: string | null;
+  duration: number | null;
+  videoUrl: string | null;
+  durationSec: number | null;
+  error: string | null;
+  createdAt: number;
+}
+
+export interface RenderRequest {
+  title: string;
+  hook: string;
+  script: string;
+  pexelsQuery: string;
+  nicheId: string;
+  nicheName: string;
+  day: string;
+  videoKey: string;
+  duration: RenderDuration;
+}
+
+/** Appel authentifié (jeton Firebase de l'utilisateur) vers le Worker. */
+async function authedCall<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+  if (!isApiConfigured()) {
+    throw new ApiError(503, 'not_configured', "Le serveur tikvo n'est pas configuré (VITE_API_URL manquant au build).");
+  }
+  const user = auth?.currentUser;
+  if (!user) throw new ApiError(401, 'unauthenticated', 'Connecte-toi pour continuer.');
+  const token = await user.getIdToken();
+  const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+  if (init.body !== undefined) headers['Content-Type'] = 'application/json';
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method: init.method || 'GET',
+      headers,
+      body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    });
+  } catch {
+    throw new ApiError(0, 'network', 'Impossible de joindre le serveur tikvo. Vérifie ta connexion.');
+  }
+  const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+  if (!res.ok) throw new ApiError(res.status, data.error || 'error', data.message || `Erreur serveur (${res.status}).`);
+  return data as T;
+}
+
+/** Lance le rendu MP4 d'une vidéo du jour. Renvoie le rendu actif s'il en existe déjà un. */
+export async function createRender(input: RenderRequest): Promise<RenderJob> {
+  return (await authedCall<{ job: RenderJob }>('/api/render', { method: 'POST', body: input })).job;
+}
+
+export async function getRender(id: string): Promise<RenderJob> {
+  return (await authedCall<{ job: RenderJob }>(`/api/jobs/${encodeURIComponent(id)}`)).job;
+}
+
+/** Tous les rendus de l'utilisateur pour un jour (AAAA-MM-JJ), du plus récent au plus ancien. */
+export async function listDayRenders(day: string): Promise<RenderJob[]> {
+  return (await authedCall<{ jobs: RenderJob[] }>(`/api/jobs?day=${encodeURIComponent(day)}`)).jobs;
+}
+
 // ---------------------------------------------------------------- appels
 
 export const backend = {

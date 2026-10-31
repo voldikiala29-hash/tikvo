@@ -1,5 +1,6 @@
 import { dispatchWorkflow } from './github';
 import { requireFirebaseUser, searchStockVideos } from './pexels';
+import { createRender, getRender, listDayRenders, parseRenderInput } from './renders';
 import {
   asRecord,
   parseJobParams,
@@ -215,6 +216,29 @@ async function handleStockSearch(request: Request, env: Env): Promise<Response> 
   return respond(request, env, { videos });
 }
 
+async function handleRenderCreate(request: Request, env: Env): Promise<Response> {
+  const user = await requireFirebaseUser(request, env);
+  const body = await readJson(request);
+  const input = parseRenderInput(body);
+  const apiUrl = new URL(request.url).origin;
+  const job = await createRender(env, user.uid, input, apiUrl, body.force === true);
+  return respond(request, env, { job }, 202);
+}
+
+async function handleRendersList(request: Request, env: Env): Promise<Response> {
+  const user = await requireFirebaseUser(request, env);
+  const day = new URL(request.url).searchParams.get('day') || '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new HttpError(400, 'invalid_param', 'Paramètre day invalide.');
+  return respond(request, env, { jobs: await listDayRenders(env, user.uid, day) });
+}
+
+async function handleRenderGet(request: Request, env: Env, id: string): Promise<Response> {
+  const user = await requireFirebaseUser(request, env);
+  const job = await getRender(env, user.uid, id);
+  if (!job) throw new HttpError(404, 'not_found', 'Rendu introuvable.');
+  return respond(request, env, { job });
+}
+
 async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/+$/, '') || '/';
@@ -226,6 +250,10 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (method === 'GET' && (path === '/' || path === '/health')) return handleHealth(request, env);
 
   if (method === 'GET' && path === '/api/pexels/search') return handleStockSearch(request, env);
+  if (method === 'POST' && path === '/api/render') return handleRenderCreate(request, env);
+  if (method === 'GET' && path === '/api/jobs') return handleRendersList(request, env);
+  const jobMatch = path.match(/^\/api\/jobs\/([0-9a-f-]{36})$/);
+  if (jobMatch && method === 'GET') return handleRenderGet(request, env, jobMatch[1]);
   const m = path.match(/^\/internal\/jobs\/([0-9a-f-]{36})$/);
   if (m && method === 'GET') return handleInternalGetJob(request, env, m[1]);
   if (m && method === 'POST') return handleInternalPatchJob(request, env, m[1]);

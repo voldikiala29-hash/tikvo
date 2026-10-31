@@ -3,6 +3,8 @@ import { FPS, hookFramesFor, wordsFromBoundaries } from '../src/video-engine/tim
 import type { BoundaryEvent } from '../src/video-engine/timeline.ts';
 
 export interface ComposeInput {
+  /** Durée choisie par l'utilisateur (15, 30 ou 60 s) : la vidéo dure au moins cette durée. */
+  targetSec?: number;
   hook: string;
   nicheName: string;
   script: string;
@@ -17,7 +19,7 @@ export const TAIL_SECONDS = 0.8;
 export const MAX_VIDEO_SECONDS = 180;
 
 export function composeProps(input: ComposeInput): ViralTemplateProps {
-  const totalSec = input.audioSec + TAIL_SECONDS;
+  const totalSec = Math.max(input.targetSec ?? 0, input.audioSec + TAIL_SECONDS);
   if (totalSec > MAX_VIDEO_SECONDS) {
     throw new Error(`La vidéo durerait ${Math.round(totalSec)} s : raccourcis le script (maximum ${MAX_VIDEO_SECONDS} s).`);
   }

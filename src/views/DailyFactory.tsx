@@ -1,7 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Download, Film } from 'lucide-react';
 import { CopyScriptButton } from '../components/CopyScriptButton';
-import { ApiError, PexelsPreviewItem, searchPexels } from '../services/backendApi';
+import {
+  ApiError,
+  PexelsPreviewItem,
+  RenderDuration,
+  RenderJob,
+  createRender,
+  getRender,
+  listDayRenders,
+  searchPexels,
+} from '../services/backendApi';
 import { StoredProgram, UserProfile, loadProgram, saveGeneratedProgram } from '../services/factoryStore';
 import { NICHE_CATALOG, ProgramVideo, generateProgram, toLocalISODate } from '../services/programGenerator';
 
@@ -11,9 +20,13 @@ interface DailyFactoryProps {
   onViewProgram: () => void;
 }
 
+const DURATIONS: RenderDuration[] = [15, 30, 60];
+const POLL_MS = 5000;
+
 const nicheLabel = (id: string) => NICHE_CATALOG.find((n) => n.id === id)?.label ?? id;
 const formatDay = (iso: string) =>
   new Date(`${iso}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+const isActive = (job: RenderJob | null | undefined) => !!job && (job.status === 'queued' || job.status === 'rendering');
 
 type PreviewState =
   | { status: 'loading' }
@@ -22,8 +35,8 @@ type PreviewState =
   | { status: 'rate_limited'; message: string }
   | { status: 'error'; message: string };
 
-/** Aperçu vertical réel (Pexels via le Worker). Décalé pour rester sous la limite Pixabay. */
-const PexelsPreview: React.FC<{ query: string; delayMs: number }> = ({ query, delayMs }) => {
+/** Aperçu vertical réel (clip Pixabay via le Worker). Décalé pour rester sous la limite du fournisseur. */
+const ClipPreview: React.FC<{ query: string; delayMs: number }> = ({ query, delayMs }) => {
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<PreviewState>({ status: 'loading' });
 
@@ -98,29 +111,60 @@ const PexelsPreview: React.FC<{ query: string; delayMs: number }> = ({ query, de
   );
 };
 
-const DailyVideoCard: React.FC<{ video: ProgramVideo; date: string; index: number }> = ({ video, date, index }) => {
-  const download = () => {
-    const content = [
-      video.title,
-      '',
-      `Accroche : ${video.hook}`,
-      '',
-      video.script,
-      '',
-      `Requête vidéo : ${video.pexelsQuery}`,
-      `Horaire conseillé : ${video.time}`,
-    ].join('\n');
-    const url = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' }));
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `tikvo-${date}-${video.time.replace(':', 'h')}-${index + 1}.txt`;
-    link.click();
-    URL.revokeObjectURL(url);
+interface DailyVideoCardProps {
+  video: ProgramVideo;
+  date: string;
+  index: number;
+  renders: RenderJob[];
+  onRender: (job: RenderJob) => void;
+}
+
+const DailyVideoCard: React.FC<DailyVideoCardProps> = ({ video, date, index, renders, onRender }) => {
+  const videoKey = `${date}-${index}`;
+  const [duration, setDuration] = useState<RenderDuration>(15);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Dernier rendu connu pour cette vidéo à cette durée (la liste est du plus récent au plus ancien).
+  const job = renders.find((r) => r.videoKey === videoKey && r.duration === duration) ?? null;
+  const rendered = job?.status === 'rendered' && !!job.videoUrl;
+
+  const generate = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const created = await createRender({
+        title: video.title,
+        hook: video.hook,
+        script: video.script,
+        pexelsQuery: video.pexelsQuery,
+        nicheId: video.niche,
+        nicheName: nicheLabel(video.niche),
+        day: date,
+        videoKey,
+        duration,
+      });
+      onRender(created);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Lancement impossible.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
     <article className="rounded-2xl bg-[#12121A] border border-white/5 p-4 grid gap-4 md:grid-cols-[160px_1fr]">
-      <PexelsPreview query={video.pexelsQuery} delayMs={index * 500} />
+      {rendered && job?.videoUrl ? (
+        <video
+          key={job.id}
+          src={job.videoUrl}
+          controls
+          playsInline
+          className="w-full aspect-[9/16] rounded-xl bg-black object-cover"
+        />
+      ) : (
+        <ClipPreview query={video.pexelsQuery} delayMs={index * 500} />
+      )}
       <div className="min-w-0 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <span className="text-[11px] font-bold text-[#00FFC6] bg-[#00FFC6]/10 px-2 py-0.5 rounded">
@@ -129,20 +173,71 @@ const DailyVideoCard: React.FC<{ video: ProgramVideo; date: string; index: numbe
           <span className="text-[10px] text-gray-500">Vidéo {index + 1}/3</span>
         </div>
         <h3 className="text-sm font-bold text-white">{video.title}</h3>
-        <p className="text-[11px] text-gray-400">Requête Pexels : {video.pexelsQuery}</p>
+        <p className="text-[11px] text-gray-400">Clips : {video.pexelsQuery}</p>
         <pre className="text-xs text-gray-300 whitespace-pre-wrap font-sans leading-relaxed">{video.script}</pre>
-        <div className="flex flex-wrap items-center gap-2 pt-1">
+
+        <div className="flex items-center gap-1.5" role="radiogroup" aria-label="Durée de la vidéo">
+          {DURATIONS.map((d) => (
+            <button
+              key={d}
+              type="button"
+              role="radio"
+              aria-checked={duration === d}
+              onClick={() => setDuration(d)}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border ${
+                duration === d ? 'border-[#00FFC6] text-[#00FFC6] bg-[#00FFC6]/10' : 'border-white/10 text-gray-400 hover:text-white'
+              }`}
+            >
+              {d} s
+            </button>
+          ))}
+        </div>
+
+        {isActive(job) && job && (
+          <div className="space-y-1.5">
+            <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-[#00FFC6] to-[#00B8D9] transition-all duration-500"
+                style={{ width: `${Math.min(100, Math.max(4, job.progress))}%` }}
+              />
+            </div>
+            <p className="text-[11px] text-gray-400">
+              {job.step} · {job.progress} %
+            </p>
+          </div>
+        )}
+
+        {rendered && job?.videoUrl && (
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              href={job.videoUrl}
+              download
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-[#00FFC6] to-[#00B8D9] text-black text-xs font-extrabold"
+            >
+              <Download size={13} />
+              <span>Télécharger le MP4</span>
+            </a>
+            {job.durationSec !== null && <span className="text-[11px] text-gray-500">{job.durationSec.toFixed(1)} s</span>}
+          </div>
+        )}
+
+        {job?.status === 'failed' && <p className="text-xs text-red-300">Rendu échoué : {job.error || 'erreur inconnue'}</p>}
+        {error && <p className="text-xs text-red-300">{error}</p>}
+
+        {!isActive(job) && !rendered && (
           <button
             type="button"
-            onClick={download}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-[#00FFC6] to-[#00B8D9] text-black text-xs font-extrabold"
+            onClick={generate}
+            disabled={busy}
+            className="px-3 py-1.5 rounded-lg bg-white text-black text-xs font-extrabold disabled:opacity-50"
           >
-            <Download size={13} />
-            <span>Télécharger</span>
+            {busy ? 'Lancement…' : job?.status === 'failed' ? 'Réessayer' : `Générer MP4 ${duration} s`}
           </button>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2 pt-1">
           <CopyScriptButton video={video} />
         </div>
-        <p className="text-[10px] text-gray-500">Fichier script (.txt) pour l’instant ; le MP4 arrive avec le moteur de rendu.</p>
       </div>
     </article>
   );
@@ -153,6 +248,9 @@ export const DailyFactory: React.FC<DailyFactoryProps> = ({ uid, profile, onView
   const [loading, setLoading] = useState<boolean>(Boolean(profile.currentProgramId));
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [renders, setRenders] = useState<RenderJob[]>([]);
+
+  const today = toLocalISODate(new Date());
 
   useEffect(() => {
     let cancelled = false;
@@ -176,6 +274,50 @@ export const DailyFactory: React.FC<DailyFactoryProps> = ({ uid, profile, onView
       cancelled = true;
     };
   }, [profile.currentProgramId]);
+
+  // Rendus déjà lancés aujourd'hui (rechargés à l'ouverture de la page).
+  useEffect(() => {
+    let cancelled = false;
+    listDayRenders(today)
+      .then((jobs) => {
+        if (!cancelled) setRenders(jobs);
+      })
+      .catch(() => {
+        /* pas de rendu affiché si le serveur est injoignable : les cartes restent utilisables */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [uid, today]);
+
+  const upsertRender = useCallback((job: RenderJob) => {
+    setRenders((prev) => (prev.some((r) => r.id === job.id) ? prev.map((r) => (r.id === job.id ? job : r)) : [job, ...prev]));
+  }, []);
+
+  // Interroge toutes les 5 s les rendus en cours.
+  const activeIds = renders
+    .filter((r) => r.status === 'queued' || r.status === 'rendering')
+    .map((r) => r.id)
+    .join(',');
+  useEffect(() => {
+    if (!activeIds) return;
+    let cancelled = false;
+    const timer = window.setInterval(() => {
+      activeIds.split(',').forEach((id) => {
+        getRender(id)
+          .then((job) => {
+            if (!cancelled) upsertRender(job);
+          })
+          .catch(() => {
+            /* un échec ponctuel se rattrape au tick suivant */
+          });
+      });
+    }, POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [activeIds, upsertRender]);
 
   // Recale le programme pour que le jour 1 soit aujourd'hui.
   const startToday = async () => {
@@ -206,7 +348,6 @@ export const DailyFactory: React.FC<DailyFactoryProps> = ({ uid, profile, onView
     );
   }
 
-  const today = toLocalISODate(new Date());
   const todayDay = program?.days.find((d) => d.date === today);
 
   if (!todayDay) {
@@ -248,7 +389,14 @@ export const DailyFactory: React.FC<DailyFactoryProps> = ({ uid, profile, onView
       </div>
       {error && <p className="text-xs text-red-300">{error}</p>}
       {todayDay.videos.map((video, i) => (
-        <DailyVideoCard key={`${todayDay.date}-${i}`} video={video} date={todayDay.date} index={i} />
+        <DailyVideoCard
+          key={`${todayDay.date}-${i}`}
+          video={video}
+          date={todayDay.date}
+          index={i}
+          renders={renders}
+          onRender={upsertRender}
+        />
       ))}
     </div>
   );
