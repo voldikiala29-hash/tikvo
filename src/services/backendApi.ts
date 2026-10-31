@@ -264,3 +264,37 @@ export const backend = {
     return (await call<{ job: JobView }>(`/jobs/${id}`)).job;
   },
 };
+
+// ---------------------------------------------------------------- sources d'inspiration
+
+export interface InspirationSource {
+  id: string;
+  url: string;
+  platform: 'tiktok' | 'youtube' | 'facebook';
+  title: string | null;
+  author: string | null;
+  /** Texte collé par l'utilisateur (description, script) : indispensable pour Facebook. */
+  notes: string;
+  createdAt: number;
+}
+
+export async function listInspiration(): Promise<{ sources: InspirationSource[]; brief: string | null }> {
+  return authedCall<{ sources: InspirationSource[]; brief: string | null }>('/api/inspiration');
+}
+
+export async function addInspiration(url: string): Promise<InspirationSource> {
+  return (await authedCall<{ source: InspirationSource }>('/api/inspiration', { method: 'POST', body: { url } })).source;
+}
+
+export async function updateInspirationNotes(id: string, notes: string): Promise<void> {
+  await authedCall<{ ok: boolean }>(`/api/inspiration/${encodeURIComponent(id)}`, { method: 'PUT', body: { notes } });
+}
+
+export async function deleteInspiration(id: string): Promise<void> {
+  await authedCall<{ ok: boolean }>(`/api/inspiration/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+/** Llama résume le style commun des sources. */
+export async function analyzeInspiration(): Promise<string> {
+  return (await authedCall<{ brief: string }>('/api/inspiration/analyze', { method: 'POST' })).brief;
+}

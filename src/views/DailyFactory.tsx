@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Download, Film } from 'lucide-react';
 import { CopyScriptButton } from '../components/CopyScriptButton';
+import { InspirationPanel } from '../components/InspirationPanel';
 import {
   ApiError,
   PexelsPreviewItem,
@@ -548,6 +549,7 @@ export const DailyFactory: React.FC<DailyFactoryProps> = ({ uid, profile, onView
         </button>
       </div>
       <SettingsPanel settings={settings} onChange={changeSettings} />
+      <InspirationPanel />
       {error && <p className="text-xs text-red-300">{error}</p>}
       {todayDay.videos.map((video, i) => {
         const key = `${program.id}|${todayDay.date}|${i}`;
