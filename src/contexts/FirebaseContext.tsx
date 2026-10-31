@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User, signInWithPopup, signOut } from 'firebase/auth';
+import { ensureUserAccount } from '../utils/ensureUserAccount';
 import {
   collection,
   doc,
@@ -107,34 +108,10 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             setLoading(false);
 
             if (db) {
-              // Sync user profile document in Firestore
-              const userDocPath = `users/${currentUser.uid}`;
               try {
-                const userRef = doc(db, 'users', currentUser.uid);
-                const existingSnap = await getDoc(userRef);
-
-                if (!existingSnap.exists()) {
-                  await setDoc(userRef, {
-                    uid: currentUser.uid,
-                    email: currentUser.email || '',
-                    displayName: currentUser.displayName || 'tikvo creator',
-                    photoURL: currentUser.photoURL || '',
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                  });
-                } else {
-                  await setDoc(
-                    userRef,
-                    {
-                      displayName: currentUser.displayName || 'tikvo creator',
-                      photoURL: currentUser.photoURL || '',
-                      updatedAt: new Date().toISOString(),
-                    },
-                    { merge: true }
-                  );
-                }
+                await ensureUserAccount(currentUser);
               } catch (err) {
-                handleFirestoreError(err, OperationType.WRITE, userDocPath);
+                handleFirestoreError(err, OperationType.WRITE, `users/${currentUser.uid}`);
               }
             }
           } else {

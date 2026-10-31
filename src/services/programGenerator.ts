@@ -1,0 +1,221 @@
+// Génère un programme de vidéos à partir de templates par niche.
+// Aucun appel à une IA : les textes sont des modèles remplis par sujet, déterministes et rapides.
+
+export const NICHE_CATALOG = [
+  { id: 'mode', label: 'Mode', emoji: '👗' },
+  { id: 'fitness', label: 'Fitness', emoji: '💪' },
+  { id: 'business', label: 'Business', emoji: '💼' },
+  { id: 'crypto', label: 'Crypto', emoji: '₿' },
+  { id: 'motivation', label: 'Motivation', emoji: '🔥' },
+  { id: 'cuisine', label: 'Cuisine', emoji: '🍳' },
+  { id: 'voyage', label: 'Voyage', emoji: '✈️' },
+  { id: 'tech', label: 'Tech', emoji: '📱' },
+  { id: 'beaute', label: 'Beauté', emoji: '💄' },
+  { id: 'musique', label: 'Musique', emoji: '🎵' },
+  { id: 'sport', label: 'Sport', emoji: '⚽' },
+  { id: 'humour', label: 'Humour', emoji: '😂' },
+] as const;
+
+export type NicheId = (typeof NICHE_CATALOG)[number]['id'];
+export type ProgramDuration = '1week' | '2weeks' | '1month';
+
+export const PROGRAM_DURATIONS: Record<ProgramDuration, { label: string; days: number; videos: number }> = {
+  '1week': { label: '1 semaine', days: 7, videos: 21 },
+  '2weeks': { label: '2 semaines', days: 14, videos: 42 },
+  '1month': { label: '1 mois', days: 30, videos: 90 },
+};
+
+export const VIDEOS_PER_DAY = 3;
+export const POSTING_TIMES = ['08:00', '13:00', '19:00'] as const;
+
+export interface ProgramVideo {
+  time: string;
+  title: string;
+  hook: string;
+  script: string;
+  pexelsQuery: string;
+  niche: NicheId;
+  status: 'planned';
+}
+
+export interface ProgramDay {
+  date: string; // AAAA-MM-JJ (heure locale)
+  videos: ProgramVideo[];
+}
+
+export interface GeneratedProgram {
+  days: ProgramDay[];
+  totalVideos: number;
+}
+
+interface NicheTemplate {
+  pexelsQuery: string;
+  subjects: string[];
+  hooks: string[];
+}
+
+const GENERIC_HOOKS = [
+  'Le piège avec {s}',
+  '{s} : ce que personne ne te dit',
+  'Tu fais cette erreur avec {s}',
+  'Ce choix sur {s} change tout',
+  'Arrête de perdre du temps avec {s}',
+  'La méthode simple pour {s}',
+  'Ce que font les pros avec {s}',
+  'En 30 secondes sur {s}',
+];
+
+const TEMPLATES: Record<NicheId, NicheTemplate> = {
+  mode: {
+    pexelsQuery: 'fashion outfit',
+    subjects: [
+      'les pièces basiques', 'ta garde-robe', 'les accessoires petit prix', 'les tenues de bureau',
+      'les couleurs qui t’avantagent', 'les vêtements de seconde main', 'les silhouettes qui allongent', 'le style minimaliste',
+    ],
+    hooks: [
+      'Le piège avec {s}', '{s} : ce que personne ne te dit', 'Tu fais cette erreur avec {s}',
+      'Une tenue complète avec {s}', 'Ce choix sur {s} change tout', 'Ton look en 10 secondes grâce à {s}',
+      'Ce que font les stylistes avec {s}', 'Arrête de gaspiller ton argent sur {s}',
+    ],
+  },
+  fitness: {
+    pexelsQuery: 'home workout',
+    subjects: ['les abdos', 'la course à pied', 'les étirements du matin', 'la récupération', 'les repas avant le sport', 'la motivation du lundi', 'les séances de 10 minutes', 'la prise de muscle'],
+    hooks: GENERIC_HOOKS,
+  },
+  business: {
+    pexelsQuery: 'office laptop work',
+    subjects: ['ta première offre', 'ton prix', 'la prospection', 'ton budget de départ', 'les réseaux sociaux pour vendre', 'ta liste de clients', 'les petites dépenses', 'ton temps de travail'],
+    hooks: GENERIC_HOOKS,
+  },
+  crypto: {
+    pexelsQuery: 'bitcoin chart',
+    subjects: ['le DCA', 'la sécurité de ton wallet', 'les arnaques en ligne', 'la gestion du risque', 'les frais de transaction', 'ton premier achat', 'les cycles de marché', 'les stablecoins'],
+    hooks: GENERIC_HOOKS,
+  },
+  motivation: {
+    pexelsQuery: 'sunrise running',
+    subjects: ['la procrastination', 'ta routine du matin', 'les mauvaises habitudes', 'la discipline', 'le doute', 'tes objectifs de l’année', 'la régularité', 'le repos'],
+    hooks: GENERIC_HOOKS,
+  },
+  cuisine: {
+    pexelsQuery: 'cooking kitchen',
+    subjects: ['les repas de la semaine', 'le meal prep', 'les épices de base', 'les cuissons au four', 'les restes du frigo', 'les petits-déjeuners rapides', 'les sauces maison', 'les recettes à 5 ingrédients'],
+    hooks: GENERIC_HOOKS,
+  },
+  voyage: {
+    pexelsQuery: 'travel landscape',
+    subjects: ['les vols pas chers', 'ta valise', 'les hôtels à petit budget', 'les itinéraires de 3 jours', 'les pièges touristiques', 'les assurances voyage', 'le sac à dos', 'les destinations hors saison'],
+    hooks: GENERIC_HOOKS,
+  },
+  tech: {
+    pexelsQuery: 'technology smartphone',
+    subjects: ['ton smartphone', 'la sécurité de ton compte', 'les applis gratuites', 'ton stockage cloud', 'les raccourcis clavier', 'ton ordinateur lent', 'les outils IA gratuits', 'ta batterie'],
+    hooks: GENERIC_HOOKS,
+  },
+  beaute: {
+    pexelsQuery: 'skincare routine',
+    subjects: ['la routine skincare du soir', 'les soins à petit prix', 'les erreurs de maquillage', 'le démaquillage', 'l’hydratation', 'les produits à éviter', 'le contour des yeux', 'les cheveux secs'],
+    hooks: GENERIC_HOOKS,
+  },
+  musique: {
+    pexelsQuery: 'music studio',
+    subjects: ['ton premier beat', 'les accords faciles', 'ton micro', 'la composition', 'les logiciels gratuits', 'les refrains qui restent', 'le mixage', 'la voix'],
+    hooks: GENERIC_HOOKS,
+  },
+  sport: {
+    pexelsQuery: 'football training',
+    subjects: ['le foot amateur', 'la préparation avant match', 'la récupération après match', 'les blessures courantes', 'le running débutant', 'le vélo', 'la natation', 'les chaussures de sport'],
+    hooks: GENERIC_HOOKS,
+  },
+  humour: {
+    pexelsQuery: 'funny reaction',
+    subjects: ['les réunions Zoom', 'les parents', 'les courses au supermarché', 'les chats', 'les débuts de semaine', 'les livreurs', 'le dimanche soir', 'les voisins'],
+    hooks: ['Quand {s} te dépasse', '{s} : la vérité brute', 'Personne ne parle de {s}', 'Ton avis sur {s} ?', 'Le moment où {s} te trahit', 'Ce que {s} ne te dit jamais', 'Tu reconnais {s} ?', 'Dix secondes sur {s}'],
+  },
+};
+
+const BODIES = [
+  'Pour {s}, commence par une seule action aujourd’hui, pas dix.',
+  'Première règle sur {s} : la régularité bat l’intensité.',
+  'Montre-le à l’écran pendant que tu parles, les gens retiennent ce qu’ils voient.',
+  'Sur {s}, un test concret vaut mieux que cent conseils.',
+  'Le détail qui change tout avec {s} tient en une phrase : fais simple.',
+  'Si tu ne devais retenir qu’une chose sur {s}, c’est celle-ci.',
+];
+
+const CTAS = [
+  'Enregistre cette vidéo pour la retrouver plus tard.',
+  'Abonne-toi pour la suite de ton programme.',
+  'Dis-moi en commentaire ce que tu testes.',
+  'Partage-la à quelqu’un qui en a besoin.',
+];
+
+const fill = (pattern: string, subject: string): string => pattern.replace(/\{s\}/g, subject);
+const capitalize = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
+
+/** Date locale au format AAAA-MM-JJ (évite le décalage UTC de toISOString). */
+export function toLocalISODate(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function tomorrow(): Date {
+  const d = new Date();
+  d.setHours(12, 0, 0, 0);
+  d.setDate(d.getDate() + 1);
+  return d;
+}
+
+function buildVideo(niche: NicheId, k: number, n: number, time: string): ProgramVideo {
+  const t = TEMPLATES[niche];
+  // Chaque combinaison (accroche × sujet) est unique jusqu'à 64 vidéos par niche, puis elle se répète.
+  const hookPattern = t.hooks[k % t.hooks.length];
+  const subject = t.subjects[Math.floor(k / t.hooks.length) % t.subjects.length];
+  const hook = fill(hookPattern, subject);
+  const body = fill(BODIES[k % BODIES.length], subject);
+  const cta = CTAS[n % CTAS.length];
+  return {
+    time,
+    title: hook,
+    hook: capitalize(subject),
+    script: [`${hook}.`, body, cta].join('\n'),
+    pexelsQuery: t.pexelsQuery,
+    niche,
+    status: 'planned',
+  };
+}
+
+/**
+ * Programme complet : VIDEOS_PER_DAY vidéos par jour, niches alternées en rotation.
+ * Le premier jour est demain (heure locale).
+ */
+export function generateProgram(
+  nicheIds: NicheId[],
+  duration: ProgramDuration,
+  startDate: Date = tomorrow(),
+): GeneratedProgram {
+  const niches = Array.from(new Set(nicheIds));
+  if (niches.length < 1 || niches.length > 3) throw new Error('Choisis entre 1 et 3 niches.');
+  const config = PROGRAM_DURATIONS[duration];
+  if (!config) throw new Error('Durée de programme inconnue.');
+
+  const perNiche = new Map<NicheId, number>();
+  const days: ProgramDay[] = [];
+  for (let d = 0; d < config.days; d++) {
+    const date = new Date(startDate);
+    date.setDate(startDate.getDate() + d);
+    const videos: ProgramVideo[] = [];
+    for (let j = 0; j < VIDEOS_PER_DAY; j++) {
+      const n = d * VIDEOS_PER_DAY + j;
+      const niche = niches[n % niches.length];
+      const k = perNiche.get(niche) ?? 0;
+      perNiche.set(niche, k + 1);
+      videos.push(buildVideo(niche, k, n, POSTING_TIMES[j]));
+    }
+    days.push({ date: toLocalISODate(date), videos });
+  }
+  return { days, totalVideos: config.days * VIDEOS_PER_DAY };
+}

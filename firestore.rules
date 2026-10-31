@@ -35,16 +35,45 @@ service cloud.firestore {
       return isSignedIn() && isValidId(userId) && request.auth.uid == userId;
     }
 
-    // Validation Blueprint: User
+    // Onboarding usine à vidéos : niches (1 à 3), durée, étape
+    function isNicheId(v) {
+      return v in ['mode', 'fitness', 'business', 'crypto', 'motivation', 'cuisine', 'voyage', 'tech', 'beaute', 'musique', 'sport', 'humour'];
+    }
+
+    function validNiches(vals) {
+      return vals is list && vals.size() <= 3 &&
+        (vals.size() < 1 || isNicheId(vals[0])) &&
+        (vals.size() < 2 || isNicheId(vals[1])) &&
+        (vals.size() < 3 || isNicheId(vals[2]));
+    }
+
+    // Validation Blueprint: User (profil + onboarding)
     function isValidUser(data) {
       return data.keys().hasAll(['uid', 'email', 'createdAt']) &&
-        data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'createdAt', 'updatedAt', 'niches', 'nicheActive', 'onboardingStep', 'programDuration', 'currentProgramId']) &&
         data.uid is string && data.uid.size() > 0 && data.uid.size() <= 128 &&
         data.email is string && data.email.size() > 0 && data.email.size() <= 256 &&
         data.createdAt is string && data.createdAt.size() <= 64 &&
         (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100)) &&
         (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 1024)) &&
-        (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 64));
+        (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 64)) &&
+        (!('niches' in data) || validNiches(data.niches)) &&
+        (!('nicheActive' in data) || isNicheId(data.nicheActive)) &&
+        (!('onboardingStep' in data) || data.onboardingStep in ['niches', 'duration', 'generating', 'done']) &&
+        (!('programDuration' in data) || data.programDuration in ['1week', '2weeks', '1month']) &&
+        (!('currentProgramId' in data) || (data.currentProgramId is string && data.currentProgramId.size() <= 160));
+    }
+
+    // Validation Blueprint: User Program (programme généré, lecture par son propriétaire uniquement)
+    function isValidUserProgram(data) {
+      return data.keys().hasAll(['uid', 'niches', 'duration', 'days', 'totalVideos', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'niches', 'duration', 'days', 'totalVideos', 'createdAt']) &&
+        data.uid is string && data.uid.size() > 0 && data.uid.size() <= 128 &&
+        validNiches(data.niches) && data.niches.size() >= 1 &&
+        data.duration in ['1week', '2weeks', '1month'] &&
+        data.days is list && data.days.size() >= 7 && data.days.size() <= 30 &&
+        data.totalVideos is int && data.totalVideos > 0 && data.totalVideos <= 90 &&
+        data.createdAt is timestamp;
     }
 
     // Validation Blueprint: Custom Niche
@@ -99,6 +128,17 @@ service cloud.firestore {
         (!('duration' in data) || (data.duration is string && data.duration.size() <= 30)) &&
         (!('tone' in data) || (data.tone is string && data.tone.size() <= 50)) &&
         (!('scriptText' in data) || (data.scriptText is string && data.scriptText.size() <= 5000));
+    }
+
+    // Match Collection: User Programs (id = {uid}_{timestamp})
+    match /userPrograms/{programId} {
+      allow get: if isSignedIn() && isValidId(programId) && resource.data.uid == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(programId) &&
+        programId.split('_')[0] == request.auth.uid &&
+        isValidUserProgram(incoming()) && incoming().uid == request.auth.uid;
+      allow update: if false;
+      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
     }
 
     // Match Collection: Users
