@@ -1,4 +1,4 @@
-// Test de bout en bout du rendu SANS Pexels ni Worker : vraie voix Edge TTS + vrai rendu Remotion
+// Test de bout en bout du rendu SANS Pixabay ni Worker : vraie voix Edge TTS + vrai rendu Remotion
 // sur des plans synthétiques générés par ffmpeg. Lancé par la CI (job "pipeline-smoke").
 import { mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';

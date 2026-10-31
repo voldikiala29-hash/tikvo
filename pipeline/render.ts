@@ -1,16 +1,19 @@
 // Rendu réel d'une vidéo tikvo, exécuté par GitHub Actions (workflow render-video.yml).
-// Voix off Edge TTS → clips Pexels → montage Remotion 1080x1920 → upload dans une release GitHub.
+// Voix off Edge TTS → clips Pixabay → montage Remotion 1080x1920 → upload dans une release GitHub.
 import { mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
-import { composeProps, MAX_VIDEO_SECONDS } from './compose.ts';
+import { composeProps, MAX_VIDEO_SECONDS, TAIL_SECONDS } from './compose.ts';
 import { ProgressReporter, WorkerApi, probe, requireEnv, run } from './lib.ts';
-import { buildQueries, collectClips, downloadTo } from './pexels.ts';
+import { buildQueries, collectClips, downloadTo } from './stock.ts';
 import { renderViral } from './renderer.ts';
 import { synthesizeVoice } from './tts.ts';
-import { clipCountFor } from '../src/video-engine/timeline.ts';
 
 const RELEASE_TAG = 'renders';
-const KEEP_ASSETS = 40;
+const KEEP_ASSETS = 300;
+const ALLOWED_DURATIONS = [15, 30, 60];
+const SECONDS_PER_CLIP = 5;
+const MIN_CLIPS = 3;
+const MAX_CLIPS = 12;
 const MAX_BYTES = 60 * 1024 * 1024;
 
 const apiUrl = requireEnv('API_URL');
@@ -75,22 +78,27 @@ async function main(): Promise<void> {
     audioFile: path.join(publicDir, 'audio', 'voice.mp3'),
   });
   console.log(`Voix : ${voice.audioSec.toFixed(1)} s, événements ${voice.kind} (${voice.events.length})`);
-  if (voice.audioSec + 0.8 > MAX_VIDEO_SECONDS) {
+  if (voice.audioSec + TAIL_SECONDS > MAX_VIDEO_SECONDS) {
     throw new Error(`La voix dure ${Math.round(voice.audioSec)} s : raccourcis le script (maximum ${MAX_VIDEO_SECONDS - 1} s).`);
   }
 
-  // 2. Clips Pexels
-  await reporter.report('Recherche des clips Pexels…', 15, true);
-  const pexelsKey = requireEnv('PEXELS_API_KEY');
-  const need = clipCountFor(voice.audioSec + 0.8);
+  // 2. Durée cible (15, 30 ou 60 s) et nombre de plans : un plan toutes les 5 secondes, entre 3 et 12.
+  const requested = Number(params.duration) || 15;
+  if (!ALLOWED_DURATIONS.includes(requested)) throw new Error(`Durée non prise en charge : ${requested} s.`);
+  const targetSec = Math.max(requested, voice.audioSec + TAIL_SECONDS);
+  const need = Math.min(MAX_CLIPS, Math.max(MIN_CLIPS, Math.ceil(targetSec / SECONDS_PER_CLIP)));
+
+  // 3. Clips Pixabay, tous distincts
+  await reporter.report('Recherche des clips Pixabay…', 15, true);
+  const pixabayKey = requireEnv('PEXELS_API_KEY'); // nom du secret conservé pendant la transition
   const candidates = await collectClips({
     need,
     ids: params.pexelsIds || [],
     queries: buildQueries(params.niche.id, params.keywords || []),
-    key: pexelsKey,
+    key: pixabayKey,
   });
-  if (candidates.length < 3) {
-    throw new Error(`Pexels n'a trouvé que ${candidates.length} clip(s) vertical(aux) pour ces mots-clés (3 minimum).`);
+  if (candidates.length < MIN_CLIPS) {
+    throw new Error(`Pixabay n'a trouvé que ${candidates.length} clip(s) vertical(aux) pour ces mots-clés (${MIN_CLIPS} minimum).`);
   }
 
   const clips: { id: string; src: string; durationSec: number; credit?: string }[] = [];
@@ -102,15 +110,16 @@ async function main(): Promise<void> {
       await downloadTo(candidate.link, dest);
       const info = await probe(dest);
       if (info.duration < 1) throw new Error('clip trop court');
-      clips.push({ id: `pexels-${candidate.id}`, src: rel, durationSec: info.duration, credit: candidate.credit });
+      clips.push({ id: `pixabay-${candidate.id}`, src: rel, durationSec: info.duration, credit: candidate.credit });
     } catch (err) {
       console.warn(`Clip ${candidate.id} ignoré : ${err instanceof Error ? err.message : err}`);
     }
   }
-  if (clips.length < 3) throw new Error('Moins de 3 clips exploitables après téléchargement.');
+  if (clips.length < MIN_CLIPS) throw new Error(`Moins de ${MIN_CLIPS} clips exploitables après téléchargement.`);
 
-  // 3. Montage
+  // 4. Montage
   const props = composeProps({
+    targetSec,
     hook: params.hook,
     nicheName: params.niche.name,
     script: params.script,
@@ -130,15 +139,16 @@ async function main(): Promise<void> {
     onRenderProgress: (p) => void reporter.report(`Rendu de la vidéo 1080×1920 (${p} %)…`, 45 + Math.round(p * 0.45)),
   });
 
-  // 4. Contrôle du fichier produit
+  // 5. Contrôle du fichier produit
   await reporter.report('Contrôle de la vidéo…', 91, true);
   const info = await probe(outFile);
   if (info.videoCodec !== 'h264') throw new Error(`Codec inattendu : ${info.videoCodec}`);
   if (info.width !== 1080 || info.height !== 1920) throw new Error(`Dimensions inattendues : ${info.width}×${info.height}`);
   if (!info.hasAudio) throw new Error('La vidéo rendue n\'a pas de piste audio.');
   if (info.size > MAX_BYTES) throw new Error(`Vidéo trop lourde (${Math.round(info.size / 1048576)} Mo, maximum 60 Mo).`);
+  if (info.duration < requested - 1) throw new Error(`Vidéo trop courte : ${info.duration.toFixed(1)} s au lieu de ${requested} s.`);
 
-  // 5. Envoi
+  // 6. Envoi
   await reporter.report('Envoi de la vidéo…', 94, true);
   const videoUrl = await uploadRelease(outFile, `${jobId}.mp4`);
   await pruneOldAssets();
