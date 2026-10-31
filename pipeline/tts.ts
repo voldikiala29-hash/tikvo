@@ -8,6 +8,7 @@ export interface VoiceResult {
   audioSec: number;
   events: BoundaryEvent[];
   kind: string;
+  engine: string;
 }
 
 /** Retire les emojis et symboles : la voix les lirait à haute voix (« fusée », « feu »...). */
@@ -52,8 +53,10 @@ export async function synthesizeVoice(options: {
     ]),
   );
 
-  const parsed = JSON.parse(await readFile(eventsFile, 'utf8')) as { kind: string; events: BoundaryEvent[] };
+  const parsed = JSON.parse(await readFile(eventsFile, 'utf8')) as { kind: string; events: BoundaryEvent[]; engine?: string };
+  const engine = parsed.engine ?? 'edge';
+  if (engine !== 'edge') console.warn(`Voix : moteur de secours utilisé (${engine}) après un refus d'Edge TTS.`);
   const info = await probe(options.audioFile);
   if (info.duration < 1) throw new Error("L'audio généré est vide ou trop court.");
-  return { audioFile: options.audioFile, audioSec: info.duration, events: parsed.events, kind: parsed.kind };
+  return { audioFile: options.audioFile, audioSec: info.duration, events: parsed.events, kind: parsed.kind, engine };
 }
