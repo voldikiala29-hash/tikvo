@@ -76,11 +76,25 @@ async function pixabayGet<T>(url: string): Promise<T> {
  * Cherche `need` clips distincts. Les identifiants déjà choisis dans l'aperçu passent d'abord.
  * Chaque requête contribue à parts égales pour que les plans viennent de plusieurs thèmes.
  */
+/**
+ * Plan de recherche selon une variante : même variante = mêmes requêtes.
+ * Variante 0 = comportement d'origine (ordre initial, page 1).
+ */
+export function queryPlan(queries: string[], seed: number): { queries: string[]; page: number } {
+  if (queries.length === 0) return { queries, page: 1 };
+  const offset = Math.abs(Math.floor(seed)) % queries.length;
+  const rotated = [...queries.slice(offset), ...queries.slice(0, offset)];
+  const page = 1 + (Math.floor(Math.abs(seed) / queries.length) % 3);
+  return { queries: rotated, page };
+}
+
 export async function collectClips(options: {
   need: number;
   ids: number[];
   queries: string[];
   key: string;
+  /** Variante du rendu : change les clips retenus (recréation d'une vidéo). */
+  seed?: number;
 }): Promise<ClipCandidate[]> {
   const found: ClipCandidate[] = [];
   const seen = new Set<number>();
@@ -104,12 +118,13 @@ export async function collectClips(options: {
   }
 
   // 2. Complément par requêtes, avec une pause entre elles pour rester sous le quota gratuit.
+  const plan = queryPlan(options.queries, options.seed ?? 0);
   const perQuery = Math.max(2, Math.ceil(options.need / Math.max(1, options.queries.length)) + 1);
-  for (const query of options.queries) {
+  for (const query of plan.queries) {
     if (found.length >= options.need) break;
     try {
       const data = await pixabayGet<{ hits?: PixabayHit[] }>(
-        endpoint({ q: query, video_type: 'film', orientation: 'vertical', per_page: '20', order: 'popular' }),
+        endpoint({ q: query, video_type: 'film', orientation: 'vertical', per_page: '20', order: 'popular', page: String(plan.page) }),
       );
       let taken = 0;
       for (const hit of data.hits || []) {

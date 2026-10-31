@@ -117,6 +117,8 @@ export interface JobData {
     keywords?: string[];
     voice?: string;
     pexelsIds?: number[];
+    /** Variante de recréation : 0 = rendu d'origine. */
+    variant?: number;
     duration?: number;
     branding?: unknown;
     settings?: unknown;
