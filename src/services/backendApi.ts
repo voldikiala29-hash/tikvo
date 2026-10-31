@@ -301,3 +301,59 @@ export async function deleteInspiration(id: string): Promise<void> {
 export async function analyzeInspiration(): Promise<string> {
   return (await authedCall<{ brief: string }>('/api/inspiration/analyze', { method: 'POST' })).brief;
 }
+
+
+// ---- Photos et vidéos personnelles ----
+
+export interface UserMedia {
+  id: string;
+  kind: 'image' | 'video';
+  mime: string;
+  bytes: number;
+  description: string;
+  createdAt: number;
+}
+
+export async function listMedia(): Promise<UserMedia[]> {
+  return (await authedCall<{ media: UserMedia[] }>('/api/media')).media;
+}
+
+/** Envoi d'un fichier brut (photo ou vidéo) avec sa description. */
+export async function uploadMedia(file: File, description: string): Promise<UserMedia> {
+  if (!isApiConfigured()) throw new ApiError(503, 'not_configured', "Le serveur tikvo n'est pas configuré.");
+  const user = auth?.currentUser;
+  if (!user) throw new ApiError(401, 'unauthenticated', 'Connecte-toi pour continuer.');
+  const token = await user.getIdToken();
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/api/media?description=${encodeURIComponent(description)}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': file.type },
+      body: file,
+    });
+  } catch {
+    throw new ApiError(0, 'network', 'Impossible de joindre le serveur tikvo. Vérifie ta connexion.');
+  }
+  const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string; media?: UserMedia };
+  if (!res.ok || !data.media) throw new ApiError(res.status, data.error || 'error', data.message || `Envoi impossible (${res.status}).`);
+  return data.media;
+}
+
+export async function updateMedia(id: string, description: string): Promise<void> {
+  await authedCall('/api/media/' + encodeURIComponent(id), { method: 'PUT', body: { description } });
+}
+
+export async function deleteMedia(id: string): Promise<void> {
+  await authedCall('/api/media/' + encodeURIComponent(id), { method: 'DELETE' });
+}
+
+/** Adresse locale d'un média (le fichier est chargé avec le jeton, jamais publié). */
+export async function mediaObjectUrl(id: string): Promise<string> {
+  if (!isApiConfigured()) throw new ApiError(503, 'not_configured', "Le serveur tikvo n'est pas configuré.");
+  const user = auth?.currentUser;
+  if (!user) throw new ApiError(401, 'unauthenticated', 'Connecte-toi pour continuer.');
+  const token = await user.getIdToken();
+  const res = await fetch(`${API_BASE}/api/media/${encodeURIComponent(id)}/file`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new ApiError(res.status, 'media', `Aperçu indisponible (${res.status}).`);
+  return URL.createObjectURL(await res.blob());
+}

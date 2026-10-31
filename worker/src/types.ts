@@ -26,6 +26,8 @@ export interface Env {
   FIREBASE_API_KEY?: string;
   // Workers AI (binding « AI » du wrangler.toml) : Meta Llama.
   AI?: { run(model: string, input: Record<string, unknown>): Promise<unknown> };
+  // Stockage des photos et vidéos de l'utilisateur (facultatif tant que R2 n'est pas activé).
+  MEDIA?: R2Bucket;
   // Fournisseurs gratuits (facultatifs) : sans clé, ils sont ignorés.
   GROQ_API_KEY?: string;
   GROQ_MODEL?: string;

@@ -1,3 +1,5 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { spawn } from 'node:child_process';
 
 export const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -119,6 +121,8 @@ export interface JobData {
     pexelsIds?: number[];
     /** Variante de recréation : 0 = rendu d'origine. */
     variant?: number;
+    /** Photos et vidéos personnelles décrites (choisies par phrase). */
+    media?: { id: string; kind: 'image' | 'video'; ext: string; description: string }[];
     duration?: number;
     branding?: unknown;
     settings?: unknown;
@@ -162,9 +166,21 @@ export class WorkerApi {
     return this.request<JobData>('GET', `/internal/jobs/${id}`);
   }
 
-  /** Une requête de recherche par phrase (null = pas de requête pour cette phrase). */
-  briefs(lines: string[], niche: string): Promise<{ queries: (string | null)[] }> {
-    return this.request<{ queries: (string | null)[] }>('POST', '/internal/briefs', { lines, niche });
+  /** Une requête Pixabay et/ou un média personnel par phrase (null = rien pour cette phrase). */
+  briefs(
+    lines: string[],
+    niche: string,
+    media: { id: string; description: string }[],
+  ): Promise<{ queries: (string | null)[]; mediaIds: (string | null)[] }> {
+    return this.request<{ queries: (string | null)[]; mediaIds: (string | null)[] }>('POST', '/internal/briefs', { lines, niche, media });
+  }
+
+  /** Télécharge un média personnel (authentifié par le secret de rendu). */
+  async download(id: string, dest: string): Promise<void> {
+    const res = await fetch(`${this.base}/internal/media/${id}`, { headers: { Authorization: `Bearer ${this.secret}` } });
+    if (!res.ok) throw new Error(`Média ${id} : HTTP ${res.status}`);
+    await mkdir(path.dirname(dest), { recursive: true });
+    await writeFile(dest, Buffer.from(await res.arrayBuffer()));
   }
 
   patchJob(id: string, patch: JobPatch): Promise<unknown> {

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mergeDropped, pickSceneHit, sceneWindows, splitScenes } from '../scenes.ts';
-import { parseBriefQueries, sanitizeQuery } from '../../worker/src/briefs.ts';
+import { parseBriefPlan, sanitizeQuery } from '../../worker/src/briefs.ts';
 
 test('une phrase du script = un plan, les lignes vides et sans mot sont ignorées', () => {
   const lines = splitScenes('Première phrase ici.\n\n🔥🔥\nDeuxième phrase là.');
@@ -57,13 +57,18 @@ test('le clip choisi correspond aux mots de la requête, sans prendre deux fois 
 });
 
 test('réponse du modèle : requêtes en anglais, invalides remplacées par null', () => {
-  assert.deepEqual(parseBriefQueries('Voici : ["Sad woman crying close up", "man laughing", 42]', 3), [
-    'sad woman crying close up',
-    'man laughing',
-    null,
-  ]);
-  assert.deepEqual(parseBriefQueries('pas de tableau', 2), [null, null]);
-  assert.deepEqual(parseBriefQueries('["seul"]', 1), [null]);
+  const plan = parseBriefPlan('Voici : ["Sad woman crying close up", "man laughing", 42]', 3);
+  assert.deepEqual(plan.queries, ['sad woman crying close up', 'man laughing', null]);
+  assert.deepEqual(plan.mediaIds, [null, null, null]);
+  assert.deepEqual(parseBriefPlan('pas de tableau', 2).queries, [null, null]);
+});
+
+test('un média personnel n’est retenu que s’il existe dans la liste envoyée', () => {
+  const id = '3f2a9c1e-1111-4222-8333-444455556666';
+  const raw = `[{"query": "sad woman crying", "media": "${id}"}, {"query": "city rain", "media": "inventé"}]`;
+  const plan = parseBriefPlan(raw, 2, [id]);
+  assert.deepEqual(plan.mediaIds, [id, null]);
+  assert.deepEqual(plan.queries, ['sad woman crying', 'city rain']);
 });
 
 test('requête nettoyée : accents, ponctuation et six mots au maximum', () => {

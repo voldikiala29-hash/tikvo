@@ -2,7 +2,8 @@ import { dispatchWorkflow } from './github';
 import { requireFirebaseUser, searchStockVideos } from './pexels';
 import { createRender, getRender, listDayRenders, parseRenderInput } from './renders';
 import { callModel, generateNicheScripts, rewriteScript, AI_MODEL } from './scripts';
-import { BRIEF_SYSTEM, buildBriefPrompt, parseBriefQueries } from './briefs';
+import { BRIEF_SYSTEM, buildBriefPrompt, parseBriefPlan } from './briefs';
+import { addUserMedia, cleanDescription, deleteUserMedia, listUserMedia, mediaFileForPipeline, mediaForJob, publicMedia, updateUserMedia, userMediaFile } from './media';
 import { fetchPublicMetadata, parseSourceUrl } from './inspiration';
 import { cleanScriptText, ScriptItem } from './scriptParse';
 import { resolveRenderSettings } from './renderSettings';
@@ -133,6 +134,46 @@ interface PexelsVideo {
 }
 
 /** Une requête de recherche de plan par phrase du script (appelé par le pipeline de rendu). */
+async function handleMediaList(request: Request, env: Env): Promise<Response> {
+  const user = await requireFirebaseUser(request, env);
+  const rows = await listUserMedia(env, user.uid);
+  return respond(request, env, { media: rows.map(publicMedia) });
+}
+
+async function handleMediaUpload(request: Request, env: Env, url: URL): Promise<Response> {
+  const user = await requireFirebaseUser(request, env);
+  const mime = request.headers.get('Content-Type') || '';
+  const data = await request.arrayBuffer();
+  const row = await addUserMedia(env, user.uid, mime, cleanDescription(url.searchParams.get('description')), data);
+  return respond(request, env, { media: publicMedia(row) }, 201);
+}
+
+async function handleMediaUpdate(request: Request, env: Env, id: string): Promise<Response> {
+  const user = await requireFirebaseUser(request, env);
+  const body = await readJson(request);
+  await updateUserMedia(env, user.uid, id, cleanDescription(body.description));
+  return respond(request, env, { ok: true });
+}
+
+async function handleMediaDelete(request: Request, env: Env, id: string): Promise<Response> {
+  const user = await requireFirebaseUser(request, env);
+  await deleteUserMedia(env, user.uid, id);
+  return respond(request, env, { ok: true });
+}
+
+async function handleMediaFile(request: Request, env: Env, id: string): Promise<Response> {
+  const user = await requireFirebaseUser(request, env);
+  const file = await userMediaFile(env, user.uid, id);
+  const headers = new Headers(file.headers);
+  for (const [k, v] of Object.entries(corsHeaders(request, env))) headers.set(k, v);
+  return new Response(file.body, { headers });
+}
+
+async function handleInternalMedia(request: Request, env: Env, id: string): Promise<Response> {
+  await requireInternal(request, env);
+  return mediaFileForPipeline(env, id);
+}
+
 async function handleInternalBriefs(request: Request, env: Env): Promise<Response> {
   await requireInternal(request, env);
   const body = await readJson(request);
@@ -142,15 +183,20 @@ async function handleInternalBriefs(request: Request, env: Env): Promise<Respons
     .slice(0, 8);
   if (lines.length === 0) throw new HttpError(400, 'invalid_param', 'Aucune phrase à illustrer.');
   const niche = typeof body.niche === 'string' && /^[a-z]{2,20}$/.test(body.niche) ? body.niche : 'general';
-  let queries: (string | null)[];
+  const media = (Array.isArray(body.media) ? body.media : [])
+    .filter((m): m is { id: string; description: string } => !!m && typeof (m as { id?: unknown }).id === 'string')
+    .map((m) => ({ id: m.id, description: cleanDescription(m.description) }))
+    .filter((m) => /^[0-9a-f-]{36}$/.test(m.id))
+    .slice(0, 40);
+  let plan: { queries: (string | null)[]; mediaIds: (string | null)[] };
   try {
-    const raw = await callModel(env, buildBriefPrompt(lines, niche), 300 + lines.length * 40, BRIEF_SYSTEM);
-    queries = parseBriefQueries(raw, lines.length);
+    const raw = await callModel(env, buildBriefPrompt(lines, niche, media), 300 + lines.length * 60, BRIEF_SYSTEM);
+    plan = parseBriefPlan(raw, lines.length, media.map((m) => m.id));
   } catch (err) {
     console.warn('Plans par phrase indisponibles :', err instanceof Error ? err.message : err);
-    queries = lines.map(() => null);
+    plan = { queries: lines.map(() => null), mediaIds: lines.map(() => null) };
   }
-  return respond(request, env, { queries });
+  return respond(request, env, plan);
 }
 
 async function handleInternalGetJob(request: Request, env: Env, id: string): Promise<Response> {
@@ -442,6 +488,8 @@ async function handleRenderCreate(request: Request, env: Env): Promise<Response>
   const user = await requireFirebaseUser(request, env);
   const body = await readJson(request);
   const input = parseRenderInput(body);
+  // Médias de l'utilisateur : le pipeline choisit ceux qui montrent la phrase.
+  input.media = mediaForJob(await listUserMedia(env, user.uid));
   const apiUrl = new URL(request.url).origin;
   const job = await createRender(env, user.uid, input, apiUrl, body.force === true);
   return respond(request, env, { job }, 202);
@@ -486,6 +534,14 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === '/api/script-overrides' && method === 'GET') return handleGetOverrides(request, env);
   if (path === '/api/script-override' && method === 'PUT') return handlePutOverride(request, env);
   if (path === '/internal/briefs' && method === 'POST') return handleInternalBriefs(request, env);
+  if (path === '/api/media' && method === 'GET') return handleMediaList(request, env);
+  if (path === '/api/media' && method === 'POST') return handleMediaUpload(request, env, url);
+  const mediaMatch = path.match(/^\/api\/media\/([0-9a-f-]{36})(\/file)?$/);
+  if (mediaMatch && method === 'PUT' && !mediaMatch[2]) return handleMediaUpdate(request, env, mediaMatch[1]);
+  if (mediaMatch && method === 'DELETE' && !mediaMatch[2]) return handleMediaDelete(request, env, mediaMatch[1]);
+  if (mediaMatch && method === 'GET' && mediaMatch[2]) return handleMediaFile(request, env, mediaMatch[1]);
+  const internalMedia = path.match(/^\/internal\/media\/([0-9a-f-]{36})$/);
+  if (internalMedia && method === 'GET') return handleInternalMedia(request, env, internalMedia[1]);
   if (method === 'GET' && path === '/api/jobs') return handleRendersList(request, env);
   const jobMatch = path.match(/^\/api\/jobs\/([0-9a-f-]{36})$/);
   if (jobMatch && method === 'GET') return handleRenderGet(request, env, jobMatch[1]);

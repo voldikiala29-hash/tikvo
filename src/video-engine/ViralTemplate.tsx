@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { interpolate, Sequence, staticFile, useCurrentFrame } from 'remotion';
+import { Img, interpolate, Sequence, staticFile, useCurrentFrame } from 'remotion';
 import { Audio, Video } from '@remotion/media';
 import type { MontageConfig, ViralTemplateProps } from './types.ts';
 import { planSegments } from './timeline.ts';
@@ -29,7 +29,8 @@ const ClipLayer: React.FC<{
   overlap: number;
   zoom: number;
   filter: string;
-}> = ({ src, index, span, overlap, zoom, filter }) => {
+  kind?: 'video' | 'image';
+}> = ({ src, index, span, overlap, zoom, filter, kind }) => {
   const f = useCurrentFrame();
   const zoomIn = index % 2 === 0;
   const scale = interpolate(f, [0, Math.max(1, span)], zoomIn ? [1, zoom] : [zoom, 1], clamp);
@@ -37,7 +38,11 @@ const ClipLayer: React.FC<{
   return (
     <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', opacity }}>
       <div style={{ width: '100%', height: '100%', transform: `scale(${scale})` }}>
-        <Video src={resolveSrc(src)} muted loop objectFit="cover" style={{ width: '100%', height: '100%', filter }} />
+        {kind === 'image' ? (
+          <Img src={resolveSrc(src)} style={{ width: '100%', height: '100%', objectFit: 'cover', filter }} />
+        ) : (
+          <Video src={resolveSrc(src)} muted loop objectFit="cover" style={{ width: '100%', height: '100%', filter }} />
+        )}
       </div>
     </div>
   );
@@ -124,6 +129,7 @@ export const ViralTemplate: React.FC<ViralTemplateProps> = ({
               overlap={overlap}
               zoom={montage.zoom}
               filter={montage.filter}
+              kind={clip.kind}
             />
           </Sequence>
         );

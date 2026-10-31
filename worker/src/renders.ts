@@ -19,6 +19,8 @@ export interface RenderInput {
   settings: RenderSettings;
   /** 0 = rendu d'origine ; autre valeur = recréation avec d'autres clips. */
   variant: number;
+  /** Photos et vidéos de l'utilisateur, décrites : le pipeline choisit celles qui montrent la phrase. */
+  media?: unknown[];
 }
 
 export interface RenderView {
@@ -154,6 +156,7 @@ export async function createRender(
     videoKey: input.videoKey,
     settings: input.settings,
     variant: input.variant,
+    media: input.media ?? [],
   };
   await env.DB.prepare(
     `INSERT INTO jobs (id, open_id, status, step, progress, params, created_at, updated_at)

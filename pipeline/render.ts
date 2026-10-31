@@ -6,7 +6,7 @@ import { composeProps, MAX_VIDEO_SECONDS, TAIL_SECONDS, resolveBranding } from '
 import { ProgressReporter, WorkerApi, probe, requireEnv, run } from './lib.ts';
 import { buildQueries, collectClips, downloadTo } from './stock.ts';
 import type { ClipCandidate } from './stock.ts';
-import { findSceneClips } from './sceneClips.ts';
+import { findSceneClips, userSceneClips } from './sceneClips.ts';
 import { mergeDropped, sceneWindows, splitScenes } from './scenes.ts';
 import type { SceneClip, SceneWindow } from './scenes.ts';
 import { FPS, wordsFromBoundaries } from '../src/video-engine/timeline.ts';
@@ -146,30 +146,34 @@ async function main(): Promise<void> {
   // 2. Plans. Priorité au script : une recherche par phrase, pour que l'image suive ce qui est dit.
   const pixabayKey = requireEnv('PEXELS_API_KEY'); // nom du secret conservé pendant la transition
   const lines = splitScenes(params.script);
-  const queries = await api
-    .briefs(lines, params.niche.id)
-    .then((r) => r.queries)
+  const plan = await api
+    .briefs(lines, params.niche.id, params.media ?? [])
     .catch((err: unknown) => {
       console.warn('Plans par phrase indisponibles, recherche par niche :', err instanceof Error ? err.message : err);
       return null;
     });
+  const queries = plan?.queries ?? null;
+  const mediaIds = plan?.mediaIds ?? lines.map(() => null);
 
   let clips: SceneClip[];
   let scenes: SceneWindow[] | undefined;
-  if (queries && queries.some((q) => q !== null)) {
-    await reporter.report(`Recherche d'un plan par phrase (${lines.length})…`, 15, true);
+  if (queries && (queries.some((q) => q !== null) || mediaIds.some((m) => m !== null))) {
+    await reporter.report(`Choix des plans pour ${lines.length} phrases…`, 15, true);
+    // Photos et vidéos personnelles là où elles montrent exactement la phrase ; Pixabay pour les autres.
+    const own = await userSceneClips(api, mediaIds, params.media ?? [], publicDir);
     const found = await findSceneClips({
-      queries,
+      queries: queries.map((q, i) => (own[i] ? null : q)),
       key: pixabayKey,
       seed: params.variant ?? 0,
       fallbackQueries: buildQueries(params.niche.id, params.keywords || []),
     });
     lap('recherche des plans');
     const got = await downloadClips(found, publicDir, reporter);
-    clips = got.filter((c): c is SceneClip => c !== null);
+    const perScene = lines.map((_, i) => own[i] ?? got[i]);
+    clips = perScene.filter((c): c is SceneClip => c !== null);
     if (clips.length < MIN_CLIPS) throw new Error(`Moins de ${MIN_CLIPS} plans exploitables après téléchargement.`);
     const timing = wordsFromBoundaries(voice.events, params.script, voice.audioSec);
-    scenes = mergeDropped(sceneWindows(lines, timing, Math.ceil(totalSec * FPS)), got.map((c) => c !== null)).windows;
+    scenes = mergeDropped(sceneWindows(lines, timing, Math.ceil(totalSec * FPS)), perScene.map((c) => c !== null)).windows;
   } else {
     // Repli : recherche générique par niche, nombre de plans selon la durée.
     const need = clipCountFor(totalSec, settings.clipsPerScript);

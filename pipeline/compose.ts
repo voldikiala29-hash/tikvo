@@ -41,7 +41,7 @@ export interface ComposeInput {
   events: BoundaryEvent[];
   audioSec: number;
   audioSrc: string;
-  clips: { id: string; src: string; durationSec: number; credit?: string }[];
+  clips: { id: string; src: string; durationSec: number; credit?: string; kind?: 'video' | 'image' }[];
   /** Une fenêtre par plan (une par phrase) : le plan suit la phrase prononcée. Absent = plans répartis. */
   scenes?: { from: number; durationInFrames: number }[];
   branding?: Branding;
@@ -70,6 +70,7 @@ export function composeProps(input: ComposeInput): ViralTemplateProps {
       src: c.src,
       durationInFrames: Math.floor(c.durationSec * FPS),
       credit: c.credit,
+      kind: c.kind,
     })),
     karaokeWords: words,
     audioSrc: input.audioSrc,
