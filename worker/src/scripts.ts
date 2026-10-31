@@ -1,5 +1,8 @@
 import { HttpError, Env } from './types';
-import { ScriptItem, parseScriptsJson } from './scriptParse';
+import { ScriptItem, cleanScriptText, parseScriptsJson } from './scriptParse';
+
+// Débit de parole moyen (mots par seconde), aligné sur src/video-engine/montage.ts.
+const WORDS_PER_SECOND = 2.8;
 
 // Meta Llama hébergé par Cloudflare Workers AI : pas de clé externe, facturé sur le compte Cloudflare.
 export const AI_MODEL = '@cf/meta/llama-3.1-8b-instruct';
@@ -25,7 +28,7 @@ export function buildPrompt(niche: string, count: number, avoid: string[]): stri
   return lines.join('\n');
 }
 
-async function callModel(env: Env, prompt: string): Promise<string> {
+async function callModel(env: Env, prompt: string, maxTokens = 2500, system = SYSTEM): Promise<string> {
   if (!env.AI) throw new HttpError(503, 'ai_unavailable', 'Workers AI non configuré.');
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
@@ -35,10 +38,10 @@ async function callModel(env: Env, prompt: string): Promise<string> {
     const out = (await Promise.race([
       env.AI.run(AI_MODEL, {
         messages: [
-          { role: 'system', content: SYSTEM },
+          { role: 'system', content: system },
           { role: 'user', content: prompt },
         ],
-        max_tokens: 2500,
+        max_tokens: maxTokens,
       }),
       timeout,
     ])) as { response?: string } | string;
@@ -70,4 +73,28 @@ export async function generateNicheScripts(env: Env, niche: string, count: numbe
     }
   }
   return result;
+}
+
+/**
+ * Réécrit un script pour qu'il dure environ `targetSeconds` à la voix.
+ * Erreur 422 si le résultat s'écarte trop de la cible : l'utilisateur relance plutôt que de recevoir n'importe quoi.
+ */
+export async function rewriteScript(env: Env, script: string, targetSeconds: number): Promise<string> {
+  const current = script.trim().split(/\s+/).filter(Boolean).length;
+  const target = Math.round(targetSeconds * WORDS_PER_SECOND);
+  const prompt = [
+    'Voici le script d’une vidéo courte en français :',
+    script.trim(),
+    '',
+    `Réécris-le pour qu’il dure environ ${targetSeconds} secondes à voix normale, soit environ ${target} mots (il en contient ${current} aujourd’hui).`,
+    'Garde le même sujet et une accroche forte en première ligne. Ton viral, direct, tutoiement. Phrases courtes, pas d’emoji, pas de hashtag, pas de titre.',
+    'Réponds uniquement avec le texte du nouveau script, une idée par ligne.',
+  ].join('\n');
+  const raw = await callModel(env, prompt, Math.max(600, target * 3), 'Tu es un scénariste expert des vidéos TikTok virales. Tu réponds uniquement avec le texte demandé.');
+  const text = cleanScriptText(raw);
+  const words = text.split(/\s+/).filter(Boolean).length;
+  if (text.length < 10 || text.length > 1500 || words < target * 0.6 || words > target * 1.4) {
+    throw new HttpError(422, 'rewrite_failed', `Le modèle n’a pas atteint la durée visée (${words} mots au lieu d’environ ${target}). Réessaie.`);
+  }
+  return text;
 }

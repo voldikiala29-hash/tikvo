@@ -1,3 +1,4 @@
+import os from 'node:os';
 import path from 'node:path';
 import { bundle } from '@remotion/bundler';
 import { ensureBrowser, renderMedia, selectComposition } from '@remotion/renderer';
@@ -31,7 +32,8 @@ export async function renderViral(options: {
     inputProps,
     crf: 22,
     pixelFormat: 'yuv420p',
-    x264Preset: 'fast',
+    x264Preset: 'veryfast',
+    concurrency: Math.max(2, os.cpus().length),
     audioCodec: 'aac',
     enforceAudioTrack: true,
     timeoutInMilliseconds: 180_000,

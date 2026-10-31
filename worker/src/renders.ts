@@ -1,10 +1,8 @@
 // Rendus MP4 : création d'un job, lecture de son état, lancement du workflow render-video.yml.
 // Un job est une ligne de la table jobs. Son propriétaire est le uid Firebase (colonne open_id, héritée).
 import { dispatchWorkflow } from './github';
-import { Env, HttpError } from './types';
-
-export const RENDER_DURATIONS = [15, 30, 60] as const;
-export type RenderDuration = (typeof RENDER_DURATIONS)[number];
+import { HttpError, Env } from './types';
+import { RenderSettings, resolveRenderSettings } from './renderSettings';
 
 const VOICE = 'fr-FR-VivienneMultilingualNeural';
 const DAILY_LIMIT = 60;
@@ -18,7 +16,7 @@ export interface RenderInput {
   nicheName: string;
   day: string;
   videoKey: string;
-  duration: RenderDuration;
+  settings: RenderSettings;
 }
 
 export interface RenderView {
@@ -28,7 +26,7 @@ export interface RenderView {
   progress: number;
   day: string | null;
   videoKey: string | null;
-  duration: number | null;
+  settings: RenderSettings;
   videoUrl: string | null;
   durationSec: number | null;
   error: string | null;
@@ -49,39 +47,36 @@ interface JobRow {
 
 const bad = (field: string) => new HttpError(400, 'invalid_param', `Champ invalide : ${field}.`);
 
-function text(value: unknown, max: number, field: string): string {
+function text(value: unknown, min: number, max: number, field: string): string {
   if (typeof value !== 'string') throw bad(field);
   const t = value.trim();
-  if (!t || t.length > max) throw bad(field);
+  if (t.length < min || t.length > max) throw bad(field);
   return t;
 }
 
 export function parseRenderInput(body: Record<string, unknown>): RenderInput {
-  const duration = Number(body.duration);
-  if (!(RENDER_DURATIONS as readonly number[]).includes(duration)) throw bad('duration');
-
-  const nicheId = text(body.nicheId, 20, 'nicheId');
+  const nicheId = text(body.nicheId, 2, 20, 'nicheId');
   if (!/^[a-z]+$/.test(nicheId)) throw bad('nicheId');
-  const day = text(body.day, 10, 'day');
+  const day = text(body.day, 10, 10, 'day');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw bad('day');
-  const videoKey = text(body.videoKey, 16, 'videoKey');
+  const videoKey = text(body.videoKey, 12, 16, 'videoKey');
   if (!/^\d{4}-\d{2}-\d{2}-\d$/.test(videoKey)) throw bad('videoKey');
 
   return {
-    title: text(body.title, 150, 'title'),
-    hook: text(body.hook, 250, 'hook'),
-    script: text(body.script, 1500, 'script'),
-    pexelsQuery: text(body.pexelsQuery, 100, 'pexelsQuery'),
+    title: text(body.title, 1, 150, 'title'),
+    hook: text(body.hook, 1, 250, 'hook'),
+    script: text(body.script, 10, 1500, 'script'),
+    pexelsQuery: text(body.pexelsQuery || 'lifestyle', 1, 100, 'pexelsQuery'),
     nicheId,
-    nicheName: text(body.nicheName, 40, 'nicheName'),
+    nicheName: text(body.nicheName, 1, 40, 'nicheName'),
     day,
     videoKey,
-    duration: duration as RenderDuration,
+    settings: resolveRenderSettings(body.settings),
   };
 }
 
 function toView(row: JobRow): RenderView {
-  let params: { day?: string; videoKey?: string; duration?: number } = {};
+  let params: { day?: string; videoKey?: string; settings?: unknown } = {};
   try {
     params = JSON.parse(row.params) as typeof params;
   } catch {
@@ -94,7 +89,7 @@ function toView(row: JobRow): RenderView {
     progress: row.progress,
     day: params.day ?? null,
     videoKey: params.videoKey ?? null,
-    duration: params.duration ?? null,
+    settings: resolveRenderSettings(params.settings),
     videoUrl: row.status === 'rendered' ? row.video_url : null,
     durationSec: row.duration_sec,
     error: row.error,
@@ -102,9 +97,19 @@ function toView(row: JobRow): RenderView {
   };
 }
 
+/** Même script et mêmes réglages qu'un rendu existant ? */
+function sameRequest(paramsJson: string, input: RenderInput): boolean {
+  try {
+    const p = JSON.parse(paramsJson) as { script?: string; settings?: unknown };
+    return p.script === input.script && JSON.stringify(resolveRenderSettings(p.settings)) === JSON.stringify(input.settings);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Crée le rendu d'une vidéo du jour et lance le workflow.
- * Sans force, renvoie le rendu actif ou réussi de cette vidéo pour cette durée (pas de double calcul).
+ * Sans force, renvoie le rendu actif ou réussi au même script et aux mêmes réglages (pas de double calcul).
  */
 export async function createRender(
   env: Env,
@@ -114,14 +119,14 @@ export async function createRender(
   force: boolean,
 ): Promise<RenderView> {
   if (!force) {
-    const existing = await env.DB.prepare(
-      `SELECT * FROM jobs WHERE open_id = ? AND json_extract(params, '$.videoKey') = ?
-       AND json_extract(params, '$.duration') = ? AND status != 'failed'
-       ORDER BY created_at DESC LIMIT 1`,
+    const rows = await env.DB.prepare(
+      `SELECT * FROM jobs WHERE open_id = ? AND json_extract(params, '$.videoKey') = ? AND status != 'failed'
+       ORDER BY created_at DESC LIMIT 10`,
     )
-      .bind(uid, input.videoKey, input.duration)
-      .first<JobRow>();
-    if (existing) return toView(existing);
+      .bind(uid, input.videoKey)
+      .all<JobRow>();
+    const same = (rows.results ?? []).find((r) => sameRequest(r.params, input));
+    if (same) return toView(same);
   }
 
   const since = Date.now() - 24 * 3600_000;
@@ -144,7 +149,7 @@ export async function createRender(
     title: input.title,
     day: input.day,
     videoKey: input.videoKey,
-    duration: input.duration,
+    settings: input.settings,
   };
   await env.DB.prepare(
     `INSERT INTO jobs (id, open_id, status, step, progress, params, created_at, updated_at)
@@ -170,7 +175,7 @@ export async function createRender(
 
 export async function listDayRenders(env: Env, uid: string, day: string): Promise<RenderView[]> {
   const rows = await env.DB.prepare(
-    `SELECT * FROM jobs WHERE open_id = ? AND json_extract(params, '$.day') = ? ORDER BY created_at DESC LIMIT 100`,
+    `SELECT * FROM jobs WHERE open_id = ? AND json_extract(params, '$.day') = ? ORDER BY created_at DESC LIMIT 200`,
   )
     .bind(uid, day)
     .all<JobRow>();

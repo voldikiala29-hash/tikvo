@@ -119,6 +119,7 @@ export interface JobData {
     pexelsIds?: number[];
     duration?: number;
     branding?: unknown;
+    settings?: unknown;
   };
   publish: {
     caption?: string;

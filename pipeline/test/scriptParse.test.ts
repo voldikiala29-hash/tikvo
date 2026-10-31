@@ -32,3 +32,10 @@ test('valide la requête : niches et durées autorisées', () => {
   assert.throws(() => parseScriptRequest({ niches: ['Tech!'], duration: 21 }));
   assert.throws(() => parseScriptRequest({ niches: ['a', 'b', 'c', 'd'], duration: 21 }));
 });
+
+import { cleanScriptText } from '../../worker/src/scriptParse.ts';
+
+test('nettoie la réponse du modèle (guillemets, étiquette, blocs de code)', () => {
+  assert.equal(cleanScriptText('Script : « Ton hook.\nUne action. »'), 'Ton hook.\nUne action.');
+  assert.equal(cleanScriptText('```\nLigne un\n\nLigne deux\n```'), 'Ligne un\nLigne deux');
+});
