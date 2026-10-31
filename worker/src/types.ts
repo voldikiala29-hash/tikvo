@@ -24,6 +24,8 @@ export interface Env {
     put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
   };
   FIREBASE_API_KEY?: string;
+  // Workers AI (binding « AI » du wrangler.toml) : Meta Llama.
+  AI?: { run(model: string, input: Record<string, unknown>): Promise<unknown> };
 }
 
 export type JobStatus =

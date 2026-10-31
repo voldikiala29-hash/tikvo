@@ -1,6 +1,8 @@
 import { dispatchWorkflow } from './github';
 import { requireFirebaseUser, searchStockVideos } from './pexels';
 import { createRender, getRender, listDayRenders, parseRenderInput } from './renders';
+import { generateNicheScripts, AI_MODEL } from './scripts';
+import { parseScriptRequest } from './scriptParse';
 import {
   asRecord,
   parseJobParams,
@@ -216,6 +218,21 @@ async function handleStockSearch(request: Request, env: Env): Promise<Response> 
   return respond(request, env, { videos });
 }
 
+async function handleGenerateScripts(request: Request, env: Env): Promise<Response> {
+  await requireFirebaseUser(request, env);
+  const body = await readJson(request);
+  let parsed: { niches: string[]; duration: number };
+  try {
+    parsed = parseScriptRequest(body);
+  } catch (err) {
+    throw new HttpError(400, 'invalid_param', err instanceof Error ? err.message : 'Requête invalide.');
+  }
+  const perNiche = Math.ceil(parsed.duration / parsed.niches.length);
+  const lists = await Promise.all(parsed.niches.map((n) => generateNicheScripts(env, n, perNiche)));
+  const scripts = Object.fromEntries(parsed.niches.map((n, i) => [n, lists[i]]));
+  return respond(request, env, { scripts, requested: parsed.duration, model: AI_MODEL });
+}
+
 async function handleRenderCreate(request: Request, env: Env): Promise<Response> {
   const user = await requireFirebaseUser(request, env);
   const body = await readJson(request);
@@ -251,6 +268,7 @@ async function route(request: Request, env: Env): Promise<Response> {
 
   if (method === 'GET' && path === '/api/pexels/search') return handleStockSearch(request, env);
   if (method === 'POST' && path === '/api/render') return handleRenderCreate(request, env);
+  if (method === 'POST' && path === '/api/generate-scripts') return handleGenerateScripts(request, env);
   if (method === 'GET' && path === '/api/jobs') return handleRendersList(request, env);
   const jobMatch = path.match(/^\/api\/jobs\/([0-9a-f-]{36})$/);
   if (jobMatch && method === 'GET') return handleRenderGet(request, env, jobMatch[1]);

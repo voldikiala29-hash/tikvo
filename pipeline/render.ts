@@ -2,7 +2,7 @@
 // Voix off Edge TTS → clips Pixabay → montage Remotion 1080x1920 → upload dans une release GitHub.
 import { mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
-import { composeProps, MAX_VIDEO_SECONDS, TAIL_SECONDS } from './compose.ts';
+import { composeProps, MAX_VIDEO_SECONDS, TAIL_SECONDS, resolveBranding } from './compose.ts';
 import { ProgressReporter, WorkerApi, probe, requireEnv, run } from './lib.ts';
 import { buildQueries, collectClips, downloadTo } from './stock.ts';
 import { renderViral } from './renderer.ts';
@@ -120,6 +120,7 @@ async function main(): Promise<void> {
   // 4. Montage
   const props = composeProps({
     targetSec,
+    branding: resolveBranding(params.branding),
     hook: params.hook,
     nicheName: params.niche.name,
     script: params.script,
