@@ -42,6 +42,8 @@ export interface ComposeInput {
   audioSec: number;
   audioSrc: string;
   clips: { id: string; src: string; durationSec: number; credit?: string }[];
+  /** Une fenêtre par plan (une par phrase) : le plan suit la phrase prononcée. Absent = plans répartis. */
+  scenes?: { from: number; durationInFrames: number }[];
   branding?: Branding;
   settings?: RenderSettings;
 }
@@ -73,6 +75,7 @@ export function composeProps(input: ComposeInput): ViralTemplateProps {
     audioSrc: input.audioSrc,
     totalDurationInFrames: Math.ceil(totalSec * FPS),
     hookFrames: hookFramesFor(input.hook, words),
+    scenes: input.scenes,
     brandTag: branding.showBrand ? branding.brandName : undefined,
     showNiche: branding.showNiche,
     showProgress: branding.showProgress,
