@@ -13,17 +13,22 @@ export async function renderViral(options: {
 }): Promise<void> {
   const entryPoint = path.resolve(import.meta.dirname, 'remotion/index.ts');
 
+  let started = Date.now();
   await ensureBrowser();
+  console.log(`[temps] navigateur prêt : ${((Date.now() - started) / 1000).toFixed(1)} s`);
 
+  started = Date.now();
   const serveUrl = await bundle({
     entryPoint,
     publicDir: options.publicDir,
     onProgress: (progress: number) => options.onBundleProgress?.(Math.round(progress)),
   });
+  console.log(`[temps] bundle Remotion : ${((Date.now() - started) / 1000).toFixed(1)} s`);
 
   const inputProps = options.props as unknown as Record<string, unknown>;
   const composition = await selectComposition({ serveUrl, id: 'Viral', inputProps });
 
+  started = Date.now();
   await renderMedia({
     composition,
     serveUrl,
@@ -39,4 +44,5 @@ export async function renderViral(options: {
     timeoutInMilliseconds: 180_000,
     onProgress: ({ progress }) => options.onRenderProgress?.(Math.round(progress * 100)),
   });
+  console.log(`[temps] rendu image par image : ${((Date.now() - started) / 1000).toFixed(1)} s`);
 }

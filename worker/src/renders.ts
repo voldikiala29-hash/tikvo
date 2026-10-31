@@ -157,7 +157,7 @@ export async function createRender(
   };
   await env.DB.prepare(
     `INSERT INTO jobs (id, open_id, status, step, progress, params, created_at, updated_at)
-     VALUES (?, ?, 'queued', 'En file d’attente', 0, ?, ?, ?)`,
+     VALUES (?, ?, 'queued', 'Lancement du serveur de rendu…', 0, ?, ?, ?)`,
   )
     .bind(id, uid, JSON.stringify(params), ts, ts)
     .run();
