@@ -239,8 +239,14 @@ async function handleGenerateScripts(request: Request, env: Env): Promise<Respon
 
 /** Résumé de style de l'utilisateur (vide si aucune source analysée). */
 async function loadBrief(env: Env, uid: string): Promise<string | null> {
-  const row = await env.DB.prepare('SELECT brief FROM style_briefs WHERE uid = ?').bind(uid).first<{ brief: string }>();
-  return row?.brief ?? null;
+  // Le style est facultatif : une erreur de lecture ne doit jamais bloquer la génération.
+  try {
+    const row = await env.DB.prepare('SELECT brief FROM style_briefs WHERE uid = ?').bind(uid).first<{ brief: string }>();
+    return row?.brief ?? null;
+  } catch (err) {
+    console.warn('[style] lecture du style impossible', err instanceof Error ? err.message : String(err));
+    return null;
+  }
 }
 
 const MAX_SOURCES = 20;
