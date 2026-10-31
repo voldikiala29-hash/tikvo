@@ -77,7 +77,7 @@ async function main(): Promise<void> {
     workDir,
     audioFile: path.join(publicDir, 'audio', 'voice.mp3'),
   });
-  console.log(`Voix : ${voice.audioSec.toFixed(1)} s, événements ${voice.kind} (${voice.events.length})`);
+  console.log(`Voix : ${voice.audioSec.toFixed(1)} s, moteur ${voice.engine}, événements ${voice.kind} (${voice.events.length})`);
   if (voice.audioSec + TAIL_SECONDS > MAX_VIDEO_SECONDS) {
     throw new Error(`La voix dure ${Math.round(voice.audioSec)} s : raccourcis le script (maximum ${MAX_VIDEO_SECONDS - 1} s).`);
   }
