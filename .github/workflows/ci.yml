@@ -22,6 +22,21 @@ jobs:
           python-version: "3.12"
       - name: Dépendances
         run: npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+      - name: YAML des workflows valide
+        run: |
+          pip install --quiet pyyaml
+          python3 - <<'PY'
+          import glob, sys, yaml
+          bad = 0
+          for path in sorted(glob.glob('.github/workflows/*.yml')):
+              try:
+                  data = yaml.safe_load(open(path, encoding='utf-8'))
+              except yaml.YAMLError as err:
+                  print(f'{path} : YAML invalide : {err}'); bad += 1; continue
+              if not isinstance(data, dict) or (True not in data and 'on' not in data):
+                  print(f'{path} : aucun déclencheur (on:)'); bad += 1
+          sys.exit(1 if bad else 0)
+          PY
       - name: Tests unitaires du pipeline
         run: npm run pipeline:test
       - name: Build du site
