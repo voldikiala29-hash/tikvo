@@ -23,9 +23,6 @@ interface SidebarProps {
   setSelectedNiche: (nicheId: NicheId) => void;
   niches: Record<string, NicheData>;
   onOpenCustomNicheModal: () => void;
-  isTikTokConnected: boolean;
-  onOpenConnectModal: () => void;
-  tikTokHandle?: string;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -37,20 +34,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setSelectedNiche,
   niches,
   onOpenCustomNicheModal,
-  isTikTokConnected,
-  onOpenConnectModal,
-  tikTokHandle,
   isOpen,
   onClose,
 }) => {
   const { user, isDemoUser, setIsFirebaseModalOpen } = useFirebase();
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, badge: null },
-    { id: 'accounts', label: 'Comptes TikTok', icon: Users, badge: 'Multi' },
     { id: 'radar', label: 'Radar Viral', icon: Flame, badge: 'HOT', isHot: true },
     { id: 'factory', label: 'Content Factory', icon: Sparkles, badge: 'IA' },
-    { id: 'calendar', label: 'Calendrier', icon: Calendar, badge: null },
-    { id: 'monetization', label: 'Monétisation', icon: DollarSign, badge: 'Shop' },
     { id: 'settings', label: 'Paramètres Niche', icon: Sliders, badge: null },
   ];
 
@@ -214,45 +205,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Bottom API & Account Status Card */}
       <div className="p-3 border-t border-white/5 bg-[#0D0D15]/80">
-        <div
-          onClick={onOpenConnectModal}
-          className="p-3 rounded-xl bg-[#1A1A27]/90 border border-white/5 hover:border-[#00FFC6]/30 cursor-pointer transition-all group"
-        >
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-              TikTok API
-            </span>
-            <div className="flex items-center gap-1">
-              {isTikTokConnected ? (
-                <>
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#00FFC6] animate-ping"></span>
-                  <span className="text-[10px] font-bold text-[#00FFC6]">Connecté</span>
-                </>
-              ) : (
-                <>
-                  <AlertCircle size={10} className="text-[#FF2E93]" />
-                  <span className="text-[10px] font-bold text-[#FF2E93]">Déconnecté</span>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between text-xs text-gray-300">
-            <div className="truncate">
-              <p className="font-medium text-white truncate text-[11px]">
-                {isTikTokConnected ? tikTokHandle || 'Compte connecté' : 'Connexion requise'}
-              </p>
-              <p className="text-[9px] text-gray-400">
-                {isTikTokConnected ? 'Publication TikTok active' : 'Clique pour lier ton profil'}
-              </p>
-            </div>
-            <ChevronRight
-              size={14}
-              className="text-gray-400 group-hover:text-[#00FFC6] group-hover:translate-x-0.5 transition-all"
-            />
-          </div>
-        </div>
-
         {/* Firebase Cloud Sync Status Card */}
         <div
           onClick={() => setIsFirebaseModalOpen(true)}

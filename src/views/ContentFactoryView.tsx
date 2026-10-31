@@ -6,7 +6,6 @@ import {
   Copy,
   Check,
   Calendar,
-  Send,
   Heart,
   MessageCircle,
   Bookmark,
@@ -36,7 +35,6 @@ import {
   TrendingHashtag,
   ScheduledPost,
 } from '../types/tiktok';
-import { backend, getSessionToken, PrivacyLevel, PublishOptions } from '../services/backendApi';
 import { RemotionViralPlayer } from '../video-engine/RemotionViralPlayer';
 import { ViralTemplateProps } from '../video-engine/types';
 import { videoEngineService } from '../video-engine/engineService';
@@ -77,7 +75,6 @@ export const ContentFactoryView: React.FC<ContentFactoryViewProps> = ({
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [copiedScript, setCopiedScript] = useState<boolean>(false);
   const [scheduledSuccess, setScheduledSuccess] = useState<boolean>(false);
-  const [directPostSuccess, setDirectPostSuccess] = useState<string | null>(null);
 
   // View Mode in Phone Frame: 'remotion' or 'tiktok'
   const [previewMode, setPreviewMode] = useState<'remotion' | 'tiktok'>('remotion');
@@ -99,34 +96,6 @@ export const ContentFactoryView: React.FC<ContentFactoryViewProps> = ({
   const [generationPercent, setGenerationPercent] = useState<number>(0);
   const [generatedVideoResult, setGeneratedVideoResult] = useState<any>(null);
   const [showVideoModal, setShowVideoModal] = useState<boolean>(false);
-
-  // Publication TikTok de la vidéo générée
-  const [creatorOptions, setCreatorOptions] = useState<PrivacyLevel[]>([]);
-  const [publishPrivacy, setPublishPrivacy] = useState<PrivacyLevel>('SELF_ONLY');
-  const [publishAtLocal, setPublishAtLocal] = useState<string>('');
-  const [publishing, setPublishing] = useState<boolean>(false);
-  const [publishMessage, setPublishMessage] = useState<string | null>(null);
-
-  // Options de confidentialité réelles du compte, chargées à l'ouverture du résultat
-  useEffect(() => {
-    if (!showVideoModal || !generatedVideoResult || !getSessionToken()) return;
-    let cancelled = false;
-    backend
-      .creatorInfo()
-      .then((info) => {
-        if (cancelled) return;
-        const options = info.privacyLevelOptions as PrivacyLevel[];
-        setCreatorOptions(options);
-        if (!options.includes(publishPrivacy) && options.length > 0) setPublishPrivacy(options[0]);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setPublishMessage(err instanceof Error ? err.message : 'Compte TikTok indisponible.');
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showVideoModal, generatedVideoResult]);
 
   // When niche changes, update template and hook defaults!
   useEffect(() => {
@@ -368,42 +337,6 @@ export const ContentFactoryView: React.FC<ContentFactoryViewProps> = ({
     setTimeout(() => setScheduledSuccess(false), 3000);
   };
 
-  const handleDirectPublish = async () => {
-    if (!generatedVideoResult?.renderId) return;
-    setPublishing(true);
-    setPublishMessage('Envoi à TikTok…');
-    try {
-      const publishAt = publishAtLocal ? new Date(publishAtLocal).getTime() : undefined;
-      const options: PublishOptions = {
-        caption: `${scriptTitle} ⚡ ${activeHook} ${niche.hashtags.map((h) => h.tag).join(' ')}`.slice(0, 2200),
-        privacy: publishPrivacy,
-        disableComment: false,
-        disableDuet: false,
-        disableStitch: false,
-        brandContent: false,
-        brandOrganic: false,
-        isAigc: false,
-        publishAt,
-      };
-      const job = await videoEngineService.publish(generatedVideoResult.renderId, options, (j) =>
-        setPublishMessage(j.step || 'Publication en cours…'),
-      );
-      if (job.status === 'scheduled' && publishAt) {
-        setPublishMessage(`Programmée pour le ${new Date(publishAt).toLocaleString('fr-FR')}.`);
-      } else if (job.status === 'published') {
-        setDirectPostSuccess(job.publish.publishId || job.id);
-        setShowVideoModal(false);
-        setPublishMessage(null);
-      } else {
-        setPublishMessage(job.publish.error || job.error || 'La publication a échoué.');
-      }
-    } catch (e) {
-      setPublishMessage(e instanceof Error ? e.message : 'Publication impossible.');
-    } finally {
-      setPublishing(false);
-    }
-  };
-
   return (
     <div className="space-y-6 pb-12">
       {/* Top Header */}
@@ -469,16 +402,6 @@ export const ContentFactoryView: React.FC<ContentFactoryViewProps> = ({
         </div>
       </div>
 
-      {directPostSuccess && (
-        <div className="p-4 rounded-xl bg-[#00FFC6]/15 border border-[#00FFC6]/40 text-[#00FFC6] text-xs font-bold flex items-center justify-between animate-in fade-in">
-          <span>
-            🚀 Vidéo publiée sur TikTok ! (ID de publication : {directPostSuccess})
-          </span>
-          <span className="text-[10px] bg-[#00FFC6] text-black px-2 py-0.5 rounded font-bold">
-            En file FYP
-          </span>
-        </div>
-      )}
 
       {/* Main Grid: Left Script Builder, Right 9:16 Phone Preview */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -1003,7 +926,7 @@ export const ContentFactoryView: React.FC<ContentFactoryViewProps> = ({
                     size={14}
                     className={generationPercent === 100 ? 'text-[#00FFC6]' : 'text-gray-600'}
                   />
-                  <span>5. Prêt pour publication automatique sur TikTok API</span>
+                  <span>5. Vidéo prête au téléchargement</span>
                 </div>
               </div>
             </div>
@@ -1011,38 +934,12 @@ export const ContentFactoryView: React.FC<ContentFactoryViewProps> = ({
             {/* Finished state actions */}
             {!isGeneratingVideo && generatedVideoResult && (
               <div className="pt-3 border-t border-white/10 space-y-3">
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <label className="space-y-1">
-                    <span className="text-gray-400">Confidentialité</span>
-                    <select
-                      value={publishPrivacy}
-                      onChange={(e) => setPublishPrivacy(e.target.value as PrivacyLevel)}
-                      className="w-full px-2.5 py-2 rounded-lg bg-[#08080D] border border-white/10 text-white"
-                    >
-                      {(creatorOptions.length > 0 ? creatorOptions : ['SELF_ONLY' as PrivacyLevel]).map((o) => (
-                        <option key={o} value={o}>
-                          {o === 'PUBLIC_TO_EVERYONE' ? 'Public' : o === 'MUTUAL_FOLLOW_FRIENDS' ? 'Amis' : o === 'FOLLOWER_OF_CREATOR' ? 'Abonnés' : 'Moi uniquement'}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="space-y-1">
-                    <span className="text-gray-400">Programmer (optionnel)</span>
-                    <input
-                      type="datetime-local"
-                      value={publishAtLocal}
-                      onChange={(e) => setPublishAtLocal(e.target.value)}
-                      className="w-full px-2.5 py-2 rounded-lg bg-[#08080D] border border-white/10 text-white"
-                    />
-                  </label>
-                </div>
-                {publishMessage && <p className="text-[11px] text-gray-300">{publishMessage}</p>}
                 <div className="p-3 rounded-xl bg-[#08080D] border border-white/5 flex items-center justify-between text-xs">
                   <span className="text-gray-400">ID de rendu :</span>
                   <span className="font-mono text-[#00FFC6] font-bold">{generatedVideoResult.renderId}</span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3">
                   <button
                     onClick={() => {
                       const link = document.createElement('a');
@@ -1056,14 +953,6 @@ export const ContentFactoryView: React.FC<ContentFactoryViewProps> = ({
                     <span>Télécharger MP4</span>
                   </button>
 
-                  <button
-                    onClick={handleDirectPublish}
-                    disabled={publishing || !getSessionToken()}
-                    className="py-2.5 rounded-xl bg-gradient-to-r from-[#00FFC6] to-[#00B8D9] text-black font-extrabold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-[#00FFC6]/20 disabled:opacity-50"
-                  >
-                    <Send size={14} />
-                    <span>{publishing ? 'Publication…' : publishAtLocal ? 'Programmer' : 'Poster sur TikTok'}</span>
-                  </button>
                 </div>
               </div>
             )}

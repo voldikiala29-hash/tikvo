@@ -19,8 +19,6 @@ interface TopbarProps {
   niches: Record<string, NicheData>;
   onOpenCustomNicheModal: () => void;
   onGenerate10Ideas: () => void;
-  isTikTokConnected: boolean;
-  onOpenConnectModal: () => void;
   onOpenMenu: () => void;
 }
 
@@ -30,8 +28,6 @@ export const Topbar: React.FC<TopbarProps> = ({
   niches,
   onOpenCustomNicheModal,
   onGenerate10Ideas,
-  isTikTokConnected,
-  onOpenConnectModal,
   onOpenMenu,
 }) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -149,28 +145,6 @@ export const Topbar: React.FC<TopbarProps> = ({
             </span>
             <span className="text-xs hidden sm:inline">{currentNiche.emoji}</span>
           </div>
-        </button>
-
-        {/* Connect TikTok Button */}
-        <button
-          onClick={onOpenConnectModal}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all border ${
-            isTikTokConnected
-              ? 'bg-[#12121A] text-[#00FFC6] border-[#00FFC6]/40 hover:bg-[#00FFC6]/10'
-              : 'bg-[#FF2E93] text-white border-transparent hover:bg-[#FF2E93]/90 shadow-md shadow-[#FF2E93]/20'
-          }`}
-        >
-          {isTikTokConnected ? (
-            <>
-              <CheckCircle2 size={15} className="text-[#00FFC6]" />
-              <span className="hidden sm:inline">TikTok Connecté</span>
-            </>
-          ) : (
-            <>
-              <Radio size={14} className="animate-pulse" />
-              <span className="hidden sm:inline">Connecter TikTok</span>
-            </>
-          )}
         </button>
 
         {/* Firebase Auth & Cloud Sync */}
