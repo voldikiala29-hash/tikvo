@@ -27,15 +27,18 @@ function requireDb() {
 
 const nowIso = () => new Date().toISOString();
 
-export function watchUserProfile(uid: string, onChange: (profile: UserProfile | null) => void): Unsubscribe {
+export function watchUserProfile(
+  uid: string,
+  onChange: (profile: UserProfile | null, error: string | null) => void,
+): Unsubscribe {
   if (!db) {
-    onChange(null);
+    onChange(null, "Firestore n'est pas configuré.");
     return () => {};
   }
   return onSnapshot(
     doc(db, 'users', uid),
     (snap) => {
-      if (!snap.exists()) return onChange(null);
+      if (!snap.exists()) return onChange(null, null);
       const d = snap.data();
       onChange({
         niches: Array.isArray(d.niches) ? (d.niches as NicheId[]) : [],
@@ -43,11 +46,11 @@ export function watchUserProfile(uid: string, onChange: (profile: UserProfile | 
         onboardingStep: (d.onboardingStep as OnboardingStep) ?? null,
         programDuration: (d.programDuration as ProgramDuration) ?? null,
         currentProgramId: (d.currentProgramId as string) ?? null,
-      });
+      }, null);
     },
     (err) => {
-      console.warn('[Firestore] profil utilisateur :', err);
-      onChange(null);
+      console.error('[Firestore] lecture du profil refusée ou en échec :', err.code, err.message);
+      onChange(null, `Lecture du profil impossible (${err.code || 'erreur'}) : ${err.message}`);
     },
   );
 }
