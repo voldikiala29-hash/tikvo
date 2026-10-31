@@ -17,6 +17,11 @@ export interface Env {
   RENDER_SECRET?: string;
   PEXELS_API_KEY?: string;
   PIXABAY_API_KEY?: string;
+  // Cache optionnel (namespace KV « tikvo-cache ») ; sans lui, cache mémoire du Worker.
+  CACHE?: {
+    get(key: string): Promise<string | null>;
+    put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
+  };
   FIREBASE_API_KEY?: string;
 }
 
