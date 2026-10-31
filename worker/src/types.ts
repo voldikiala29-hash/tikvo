@@ -3,6 +3,7 @@ export interface Env {
 
   // Variables non secrètes (wrangler.toml)
   FRONTEND_URL: string;
+  FIREBASE_PROJECT_ID: string;
   GITHUB_REPO: string;
   GITHUB_REF: string;
   TIKTOK_SCOPES: string;
@@ -15,6 +16,7 @@ export interface Env {
   GH_DISPATCH_TOKEN?: string;
   RENDER_SECRET?: string;
   PEXELS_API_KEY?: string;
+  FIREBASE_API_KEY?: string;
 }
 
 export type JobStatus =

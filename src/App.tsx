@@ -5,6 +5,7 @@ import { LoginView } from './views/LoginView';
 import { OnboardingNiches } from './views/OnboardingNiches';
 import { ProgramDurationView } from './views/ProgramDuration';
 import { ProgramView } from './views/ProgramView';
+import { FactoryHome } from './views/FactoryHome';
 
 const Shell: React.FC<{ email?: string | null; onLogout: () => void; children: React.ReactNode }> = ({
   email,
@@ -65,9 +66,10 @@ function FactoryGate() {
     body = <OnboardingNiches uid={user.uid} initial={profile?.niches ?? []} />;
   } else if (step === 'duration') {
     body = <ProgramDurationView uid={user.uid} />;
-  } else {
-    // 'generating' ou 'done' : ProgramView génère puis affiche le programme.
+  } else if (step === 'generating') {
     body = <ProgramView uid={user.uid} profile={profile} />;
+  } else {
+    body = <FactoryHome uid={user.uid} profile={profile} />;
   }
 
   return (
