@@ -25,6 +25,8 @@ import { firstLine, scriptFromAI } from '../services/scriptText';
 import { parseScriptPaste, type ImportedScript } from '../services/scriptImport';
 import { VOICES, VOICE_STYLES, resolveVoice } from '../video-engine/voices';
 import { parseStoryboard } from '../video-engine/storyboard';
+import { CHARACTERS, DEFAULT_MAIN_CHARACTER } from '../video-engine/cartoon/catalog';
+import { Character } from '../video-engine/cartoon/Character';
 import {
   ASPECTS,
   CLIP_CHOICES,
@@ -303,6 +305,27 @@ const DailyVideoCard: React.FC<DailyVideoCardProps> = ({
     }
   });
   const board = parseStoryboard(storyboardText);
+  // Style de montage et personnage principal du dessin animé, gardés par carte (navigateur uniquement).
+  const lookKey = `tikvo.look.${videoKey}`;
+  const [look, setLook] = useState<{ style: 'stock' | 'cartoon'; mainCharacter: string }>(() => {
+    try {
+      const raw = JSON.parse(window.localStorage.getItem(lookKey) ?? 'null') as { style?: string; mainCharacter?: string } | null;
+      return {
+        style: raw?.style === 'cartoon' ? 'cartoon' : 'stock',
+        mainCharacter: typeof raw?.mainCharacter === 'string' ? raw.mainCharacter : DEFAULT_MAIN_CHARACTER,
+      };
+    } catch {
+      return { style: 'stock', mainCharacter: DEFAULT_MAIN_CHARACTER };
+    }
+  });
+  const updateLook = (next: { style: 'stock' | 'cartoon'; mainCharacter: string }) => {
+    setLook(next);
+    try {
+      window.localStorage.setItem(lookKey, JSON.stringify(next));
+    } catch {
+      /* stockage indisponible : le choix reste affiché, sans être gardé */
+    }
+  };
   const [rewriting, setRewriting] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -365,6 +388,8 @@ const DailyVideoCard: React.FC<DailyVideoCardProps> = ({
     try {
       const created = await createRender({
         storyboard: board.shots.length > 0 ? board.shots : undefined,
+        style: look.style,
+        mainCharacter: look.style === 'cartoon' ? look.mainCharacter : undefined,
         title: video.title,
         hook: hookOverride || firstLine(script) || video.hook,
         script: script.trim(),
@@ -464,6 +489,54 @@ const DailyVideoCard: React.FC<DailyVideoCardProps> = ({
             </span>
             {board.errors.length > 0 && <span className="block text-[11px] text-red-400 mt-1">{board.errors[0]}</span>}
           </label>
+
+          <div className="space-y-2">
+            <span className="block text-[11px] text-gray-400">Style de la vidéo</span>
+            <div className="flex gap-2">
+              {(
+                [
+                  ['stock', 'Vidéos Pixabay'],
+                  ['cartoon', 'Dessin animé'],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  aria-pressed={look.style === id}
+                  onClick={() => updateLook({ ...look, style: id })}
+                  className={`flex-1 rounded-xl border px-3 py-2 text-xs font-bold ${
+                    look.style === id ? 'border-[#00FFC6] text-[#00FFC6] bg-[#00FFC6]/10' : 'border-white/10 text-gray-400'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {look.style === 'cartoon' && (
+              <div className="space-y-2">
+                <span className="block text-[11px] text-gray-400">Personnage principal</span>
+                <div className="grid grid-cols-5 gap-2">
+                  {CHARACTERS.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      aria-pressed={look.mainCharacter === c.id}
+                      title={c.name}
+                      onClick={() => updateLook({ ...look, mainCharacter: c.id })}
+                      className={`rounded-xl border p-1 flex flex-col items-center gap-1 ${
+                        look.mainCharacter === c.id ? 'border-[#00FFC6]' : 'border-white/10'
+                      }`}
+                    >
+                      <span className="block w-full rounded-lg bg-white flex justify-center overflow-hidden">
+                        <Character characterId={c.id} height={60} />
+                      </span>
+                      <span className="text-[10px] text-gray-300">{c.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="space-y-2">
             <button

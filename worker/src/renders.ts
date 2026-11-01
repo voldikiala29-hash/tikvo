@@ -29,6 +29,10 @@ export interface RenderInput {
   media?: unknown[];
   /** Plans voulus, dans l'ordre (vide = plans issus du script). */
   storyboard: StoryboardShot[];
+  /** Style : plans Pixabay (stock) ou dessin animé (cartoon). */
+  style: 'stock' | 'cartoon';
+  /** Personnage principal du dessin animé (identifiant du catalogue). */
+  mainCharacter: string;
 }
 
 export interface RenderView {
@@ -106,6 +110,9 @@ export function parseRenderInput(body: Record<string, unknown>): RenderInput {
     settings: resolveRenderSettings(body.settings),
     variant: Number.isInteger(body.variant) ? Math.min(999, Math.max(0, Number(body.variant))) : 0,
     storyboard: storyboardInput(body.storyboard),
+    style: body.style === 'cartoon' ? 'cartoon' : 'stock',
+    mainCharacter:
+      typeof body.mainCharacter === 'string' && /^[a-z-]{2,30}$/.test(body.mainCharacter) ? body.mainCharacter : 'employe',
   };
 }
 
@@ -134,9 +141,11 @@ function toView(row: JobRow): RenderView {
 /** Même script et mêmes réglages qu'un rendu existant ? */
 function sameRequest(paramsJson: string, input: RenderInput): boolean {
   try {
-    const p = JSON.parse(paramsJson) as { script?: string; settings?: unknown; storyboard?: unknown };
+    const p = JSON.parse(paramsJson) as { script?: string; settings?: unknown; storyboard?: unknown; style?: string; mainCharacter?: string };
     return (
       p.script === input.script &&
+      (p.style ?? 'stock') === input.style &&
+      (input.style === 'stock' || (p.mainCharacter ?? 'employe') === input.mainCharacter) &&
       JSON.stringify(resolveRenderSettings(p.settings)) === JSON.stringify(input.settings) &&
       JSON.stringify(p.storyboard ?? []) === JSON.stringify(input.storyboard)
     );
@@ -191,6 +200,8 @@ export async function createRender(
     variant: input.variant,
     media: input.media ?? [],
     storyboard: input.storyboard,
+    style: input.style,
+    mainCharacter: input.mainCharacter,
   };
   await env.DB.prepare(
     `INSERT INTO jobs (id, open_id, status, step, progress, params, created_at, updated_at)

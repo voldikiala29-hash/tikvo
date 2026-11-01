@@ -159,6 +159,10 @@ export interface RenderRequest {
   variant?: number;
   /** Plans voulus, dans l'ordre (facultatif). */
   storyboard?: { text: string; seconds: number | null }[];
+  /** Style : plans Pixabay (défaut) ou dessin animé. */
+  style?: 'stock' | 'cartoon';
+  /** Personnage principal du dessin animé (identifiant du catalogue). */
+  mainCharacter?: string;
 }
 
 /** Appel authentifié (jeton Firebase de l'utilisateur) vers le Worker. */
