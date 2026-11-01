@@ -6,8 +6,23 @@ export const STORY_HAIRS = ['court', 'frange', 'chignon', 'herisse', 'gris'] as 
 export const STORY_EXPRESSIONS = ['neutre', 'content', 'colere', 'triste', 'surpris'] as const;
 export const STORY_SETS = ['bureau', 'couloir', 'salle-reunion', 'exterieur'] as const;
 export const STORY_MODES = ['narrator', 'dialogue', 'both'] as const;
+export const STORY_ACTIONS = [
+  'immobile',
+  'marcher',
+  'sauter',
+  'lever-bras',
+  'saluer',
+  'pleurer',
+  'sursauter',
+  'rire',
+  'applaudir',
+  'entrer',
+  'sortir',
+] as const;
+export const MAX_ACTIONS_PER_SCENE = 3;
 
 export type StoryMode = (typeof STORY_MODES)[number];
+export type StoryAction = (typeof STORY_ACTIONS)[number];
 export type StoryExpression = (typeof STORY_EXPRESSIONS)[number];
 
 export interface StoryCharacter {
@@ -28,12 +43,20 @@ export interface StoryLine {
   expression: StoryExpression;
 }
 
+export interface StoryAct {
+  /** Identifiant du héros qui fait le geste. */
+  actor: string;
+  action: StoryAction;
+}
+
 export interface StoryScene {
   set: (typeof STORY_SETS)[number];
   seconds: number;
   /** Texte du narrateur pendant la scène (absent en mode dialogues). */
   narration?: string;
   lines: StoryLine[];
+  /** Gestes des héros pendant la scène. */
+  actions: StoryAct[];
 }
 
 export interface Story {
@@ -126,7 +149,13 @@ function character(value: unknown, index: number, seen: Set<string>): StoryChara
  * durée totale entre 10 et 120 s ; 2 à 8 scènes ; 1 à 4 héros.
  */
 export function parseStory(raw: string, mode: StoryMode): Story {
-  const o = extractJsonObject(raw) as Record<string, unknown>;
+  return validateStory(extractJsonObject(raw), mode);
+}
+
+/** Valide un objet d'histoire (reçu du modèle, ou stocké dans un rendu) et renvoie sa version normalisée. */
+export function validateStory(input: unknown, mode: StoryMode): Story {
+  if (!input || typeof input !== 'object') return fail('Histoire : objet attendu.');
+  const o = input as Record<string, unknown>;
   const title = textOf(o.title, 3, 80, 'Titre');
   const hook = textOf(o.hook, 3, 120, 'Accroche');
 
@@ -176,7 +205,18 @@ export function parseStory(raw: string, mode: StoryMode): Story {
     lineCount += lines.length;
     if (!narration && lines.length === 0) return fail(`${label} : narration ou réplique attendue.`);
 
-    return { set: oneOf(sc.set, STORY_SETS, `${label} : décor`), seconds, narration, lines };
+    const rawActs = sc.actions === undefined ? [] : sc.actions;
+    if (!Array.isArray(rawActs) || rawActs.length > MAX_ACTIONS_PER_SCENE) {
+      return fail(`${label} : 0 à ${MAX_ACTIONS_PER_SCENE} gestes.`);
+    }
+    const actions: StoryAct[] = rawActs.map((a, k) => {
+      const ao = (a ?? {}) as Record<string, unknown>;
+      const actor = typeof ao.actor === 'string' ? ao.actor : '';
+      if (!ids.has(actor)) return fail(`${label}, geste ${k + 1} : héros inconnu.`);
+      return { actor, action: oneOf(ao.action, STORY_ACTIONS, `${label}, geste ${k + 1} : action`) };
+    });
+
+    return { set: oneOf(sc.set, STORY_SETS, `${label} : décor`), seconds, narration, lines, actions };
   });
 
   if (total < MIN_TOTAL_SECONDS || total > MAX_TOTAL_SECONDS) {
@@ -219,13 +259,14 @@ export function storyPrompt(request: StoryRequest): string {
     '  "title": "titre court",',
     '  "hook": "accroche de 1 phrase qui donne envie de regarder",',
     '  "characters": [{"id":"employe","name":"Nom","hair":"court|frange|chignon|herisse|gris","hairColor":"#RRGGBB","shirt":"#RRGGBB","tie":"#RRGGBB ou absent","glasses":false,"voice":{"gender":"f|m","age":"jeune|adulte|senior"}}],',
-    '  "scenes": [{"set":"bureau|couloir|salle-reunion|exterieur","seconds":4,"narration":"texte ou absent","lines":[{"speaker":"id du héros ou narrator","text":"réplique","expression":"neutre|content|colere|triste|surpris"}]}]',
+    '  "scenes": [{"set":"bureau|couloir|salle-reunion|exterieur","seconds":4,"narration":"texte ou absent","lines":[{"speaker":"id du héros ou narrator","text":"réplique","expression":"neutre|content|colere|triste|surpris"}],"actions":[{"actor":"id du héros","action":"immobile|marcher|sauter|lever-bras|saluer|pleurer|sursauter|rire|applaudir|entrer|sortir"}]}]',
     '}',
     '',
     'Règles :',
     `- 1 à ${MAX_CHARACTERS} héros, identifiants en minuscules sans accent (ex. "employe", "patron").`,
     `- ${MIN_SCENES} à ${MAX_SCENES} scènes, chacune de 2 à 15 s ; durée totale de ${MIN_TOTAL_SECONDS} à ${MAX_TOTAL_SECONDS} s.`,
-    '- Chaque scène a une narration ou au moins une réplique. Au plus 3 répliques par scène.',
+    '- Chaque scène a une narration ou au moins une réplique. Au plus 3 répliques et 3 gestes par scène.',
+    '- Les gestes collent à ce qui se passe dans la scène (pleurer si la scène est triste, lever les bras si quelqu’un gagne…).',
     '- Les scènes suivent le récit dans l’ordre, et chaque héros a une apparence cohérente d’une scène à l’autre.',
     '- Phrases courtes, faciles à dire à voix haute. Pas d’emoji, pas de hashtag.',
   ].join('\n');
@@ -264,4 +305,12 @@ export function parseSubjects(raw: string): string[] {
   } catch {
     return SUBJECT_FALLBACK;
   }
+}
+
+/** Texte prononcé de l'histoire, dans l'ordre (narration puis répliques de chaque scène). */
+export function storyText(story: Story): string {
+  return story.scenes
+    .flatMap((scene) => [scene.narration, ...scene.lines.map((l) => l.text)])
+    .filter((t): t is string => typeof t === 'string' && t.length > 0)
+    .join('\n');
 }

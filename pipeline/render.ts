@@ -5,6 +5,10 @@ import path from 'node:path';
 import { composeProps, MAX_VIDEO_SECONDS, TAIL_SECONDS, resolveBranding } from './compose.ts';
 import { ProgressReporter, WorkerApi, probe, requireEnv, run } from './lib.ts';
 import { cartoonVideoProps } from '../src/video-engine/cartoon/props.ts';
+import { heroVoice, placeSpoken, type SpokenItem } from '../src/video-engine/cartoon/dialogue.ts';
+import { storyCartoonProps } from '../src/video-engine/cartoon/storyProps.ts';
+import { hookFramesFor } from '../src/video-engine/timeline.ts';
+import type { Story } from '../src/video-engine/story.ts';
 import { directScene } from '../src/video-engine/cartoon/direction.ts';
 import { DEFAULT_MAIN_CHARACTER } from '../src/video-engine/cartoon/catalog.ts';
 import { buildQueries, collectClips, downloadTo } from './stock.ts';
@@ -14,6 +18,7 @@ import { mergeDropped, sceneWindows, shotWindows, splitScenes } from './scenes.t
 import type { SceneClip, SceneWindow } from './scenes.ts';
 import { FPS, alignedWords } from '../src/video-engine/timeline.ts';
 import { renderViral, type CompositionId } from './renderer.ts';
+import type { JobData } from './lib.ts';
 import { synthesizeVoice } from './tts.ts';
 import { resolveVoice, voiceLabel } from '../src/video-engine/voices.ts';
 import { aspectSize, clipCountFor, resolveRenderSettings } from '../src/video-engine/montage.ts';
@@ -104,6 +109,117 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T, index: nu
   return out;
 }
 
+/**
+ * Rendu d'une histoire : une voix par héros (et une pour le narrateur), une piste audio par réplique,
+ * scènes calées sur la voix, puis montage « Cartoon ». Les contrôles et l'envoi suivent le même chemin que les autres rendus.
+ */
+async function renderStoryJob(options: {
+  story: Story;
+  params: JobData['params'];
+  settings: ReturnType<typeof resolveRenderSettings>;
+  workDir: string;
+  publicDir: string;
+}): Promise<void> {
+  const { story, params, settings, workDir, publicDir } = options;
+  const size = aspectSize(settings.aspect);
+  const narratorVoice = resolveVoice(params.niche?.id, settings.voice, settings.voiceStyle);
+
+  // Une réplique = une piste audio, dans l'ordre des scènes : narration d'abord, puis répliques.
+  const jobs: { speaker: string; sceneIndex: number; text: string; expression: string; voice: string; rate?: string; pitch?: string }[] = [];
+  story.scenes.forEach((scene, sceneIndex) => {
+    if (scene.narration) {
+      jobs.push({ speaker: 'narrator', sceneIndex, text: scene.narration, expression: 'neutre', voice: narratorVoice.voice, rate: narratorVoice.rate, pitch: narratorVoice.pitch });
+    }
+    for (const line of scene.lines) {
+      const idx = story.characters.findIndex((c) => c.id === line.speaker);
+      const hv = heroVoice(story.characters[idx], idx);
+      jobs.push({ speaker: line.speaker, sceneIndex, text: line.text, expression: line.expression, voice: hv.voice, rate: hv.rate, pitch: hv.pitch });
+    }
+  });
+  if (jobs.length === 0) throw new Error("L'histoire n'a aucune réplique.");
+
+  const items: SpokenItem[] = [];
+  const audioFiles: string[] = [];
+  const engines = new Set<string>();
+  for (let k = 0; k < jobs.length; k++) {
+    const job = jobs[k];
+    const rel = `audio/line-${k + 1}.mp3`;
+    await reporter.report(`Voix : réplique ${k + 1}/${jobs.length}…`, 5 + Math.round((k / jobs.length) * 10), true);
+    const voice = await synthesizeVoice({
+      text: job.text,
+      voice: job.voice,
+      rate: job.rate,
+      pitch: job.pitch,
+      workDir,
+      audioFile: path.join(publicDir, rel),
+      api,
+      jobId,
+    });
+    engines.add(voice.engine);
+    items.push({ speaker: job.speaker, sceneIndex: job.sceneIndex, text: job.text, expression: job.expression, audioSec: voice.audioSec, events: voice.events });
+    audioFiles.push(rel);
+  }
+
+  const timeline = placeSpoken(items, story.scenes.map((s) => s.seconds));
+  const totalSec = timeline.totalFrames / FPS;
+  if (totalSec > MAX_VIDEO_SECONDS) throw new Error(`L'histoire durerait ${Math.round(totalSec)} s : raccourcis-la (maximum ${MAX_VIDEO_SECONDS} s).`);
+  console.log(`[histoire] ${jobs.length} répliques, ${totalSec.toFixed(1)} s, moteurs : ${[...engines].join(', ')}`);
+  lap('voix des héros');
+
+  const karaokeWords = timeline.items.flatMap((it) => it.words);
+  const branding = resolveBranding(params.branding);
+  const props = storyCartoonProps({
+    story,
+    timeline,
+    audioFiles,
+    hook: params.hook ?? story.hook,
+    nicheName: params.niche?.name ?? '',
+    brandTag: branding.showBrand ? branding.brandName : undefined,
+    width: size.width,
+    height: size.height,
+    showNiche: branding.showNiche,
+    showProgress: branding.showProgress,
+    hookFrames: hookFramesFor(story.hook, karaokeWords),
+    karaokeWords,
+  });
+
+  await reporter.report('Montage Remotion : préparation…', 36, true);
+  const outFile = path.join(workDir, `${jobId}.mp4`);
+  await renderViral({
+    props,
+    composition: 'Cartoon',
+    publicDir,
+    outFile,
+    onBundleProgress: (p) => void reporter.report(`Montage Remotion : préparation (${p} %)…`, 36 + Math.round(p * 0.08)),
+    onRenderProgress: (p) => void reporter.report(`Rendu ${size.width}×${size.height} (${p} %)…`, 45 + Math.round(p * 0.45)),
+  });
+
+  lap('montage terminé');
+  await reporter.report('Contrôle de la vidéo…', 91, true);
+  const info = await probe(outFile);
+  if (info.videoCodec !== 'h264') throw new Error(`Codec inattendu : ${info.videoCodec}`);
+  if (info.width !== size.width || info.height !== size.height) {
+    throw new Error(`Dimensions inattendues : ${info.width}×${info.height} (attendu ${size.width}×${size.height})`);
+  }
+  if (!info.hasAudio) throw new Error("La vidéo rendue n'a pas de piste audio.");
+  if (info.size > MAX_BYTES) throw new Error(`Vidéo trop lourde (${Math.round(info.size / 1048576)} Mo, maximum 60 Mo).`);
+
+  await reporter.report('Envoi de la vidéo…', 94, true);
+  const videoUrl = await uploadRelease(outFile, `${jobId}.mp4`);
+  await pruneOldAssets();
+  const voiceNote = `Voix: ${[...engines].join(' + ')} · histoire (${story.characters.length} héros)`;
+  await api.patchJob(jobId, {
+    status: 'rendered',
+    step: `Vidéo prête · ${voiceNote}`,
+    progress: 100,
+    videoUrl,
+    videoBytes: info.size,
+    durationSec: Math.round(info.duration * 10) / 10,
+    error: null,
+  });
+  console.log(`Terminé : ${videoUrl} (${(info.size / 1048576).toFixed(1)} Mo, ${info.duration.toFixed(1)} s, ${size.width}×${size.height})`);
+}
+
 async function main(): Promise<void> {
   const job = await api.getJob(jobId);
   const params = job.params;
@@ -116,6 +232,11 @@ async function main(): Promise<void> {
   await rm(workDir, { recursive: true, force: true });
   await mkdir(path.join(publicDir, 'clips'), { recursive: true });
   await mkdir(path.join(publicDir, 'audio'), { recursive: true });
+
+  if (params.story) {
+    await renderStoryJob({ story: params.story as Story, params, settings, workDir, publicDir });
+    return;
+  }
 
   let voiceNote = '';
   // Durées par étape, lues dans les journaux GitHub Actions pour cibler les lenteurs.

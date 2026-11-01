@@ -2,14 +2,37 @@
 import React, { useMemo } from 'react';
 import { AbsoluteFill, Audio, Sequence, interpolate, staticFile, useCurrentFrame } from 'remotion';
 import { chunkAt, chunkCaptions } from '../captions.ts';
+import { FPS } from '../timeline.ts';
 import { Character } from './Character.tsx';
 import { CartoonSet } from './Sets.tsx';
+import { poseFor, REST_POSE, type Pose } from './poses.ts';
 import type { CartoonProps, CartoonScene } from './props.ts';
 
 const clamp = { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' } as const;
 const resolveSrc = (src: string): string => (/^(https?:)?\/\//.test(src) ? src : staticFile(src));
 
-const SceneView: React.FC<{ scene: CartoonScene; width: number; height: number; mouth: number }> = ({ scene, width, height, mouth }) => {
+/** Déplacement d'un personnage pendant la scène : entrée (depuis le côté), sortie (vers le côté). */
+function moveOf(action: CartoonScene['actors'][number]['action'], t: number, duration: number): { dx: number; alpha: number } {
+  if (action === 'entrer') return { dx: -0.3 * (1 - Math.min(1, t / 1)), alpha: Math.min(1, t / 0.4) };
+  if (action === 'sortir') {
+    const left = Math.max(0, duration - t);
+    return { dx: 0.3 * Math.min(1, Math.max(0, 1 - left / 1)), alpha: Math.min(1, left / 0.4) };
+  }
+  return { dx: 0, alpha: 1 };
+}
+
+/** Un plan : décor, personnages, gestes et bouches qui parlent (`speakingKey` = héros qui parle). */
+const SceneView: React.FC<{ scene: CartoonScene; width: number; height: number; speakingKey: string | null; mouth: number }> = ({
+  scene,
+  width,
+  height,
+  speakingKey,
+  mouth,
+}) => {
+  // Dans une séquence, useCurrentFrame donne la frame locale au plan.
+  const local = useCurrentFrame();
+  const t = local / FPS;
+  const duration = scene.durationInFrames / FPS;
   const floorY = height * 0.66;
   const charHeight = height * 0.2;
   return (
@@ -18,21 +41,27 @@ const SceneView: React.FC<{ scene: CartoonScene; width: number; height: number; 
       {scene.actors.map((actor, i) => {
         const h = charHeight * actor.scale;
         const w = (h * 200) / 360;
+        const move = moveOf(actor.action, t, duration);
+        const pose: Pose = actor.action ? poseFor(actor.action, t) : REST_POSE;
+        const speaking = speakingKey !== null && speakingKey === actor.key;
         return (
           <div
-            key={`${actor.characterId}-${i}`}
+            key={`${actor.key}-${i}`}
             style={{
               position: 'absolute',
-              left: actor.x * width - w / 2,
+              left: (actor.x + move.dx) * width - w / 2,
               top: floorY - h,
               width: w,
               height: h,
+              opacity: move.alpha,
             }}
           >
             <Character
               characterId={actor.characterId}
+              look={actor.look}
               expression={actor.expression}
-              mouthOpen={actor.speaking ? mouth : 0}
+              mouthOpen={speaking ? mouth : 0}
+              pose={pose}
               height={h}
             />
           </div>
@@ -55,6 +84,8 @@ export const CartoonTemplate: React.FC<CartoonProps> = ({
   showNiche,
   showProgress,
   scenes,
+  utterances,
+  audioTracks,
 }) => {
   const frame = useCurrentFrame();
   const unit = Math.min(width, height) / 1080;
@@ -75,20 +106,33 @@ export const CartoonTemplate: React.FC<CartoonProps> = ({
     }
   }
   const chunk = activeIdx !== -1 ? chunkAt(chunks, activeIdx) : undefined;
-  // La bouche du personnage principal bouge pendant qu'on prononce un mot.
+  // Qui parle : le héros de la réplique en cours (mode histoire), ou le personnage principal (mode simple).
   const speaking = activeIdx !== -1 && frame <= (karaokeWords[activeIdx]?.endFrame ?? 0);
-  const mouth = speaking ? 0.5 + 0.5 * Math.sin(frame * 1.7) : 0;
+  const speakingKey = utterances
+    ? (utterances.find((u) => frame >= u.startFrame && frame < u.endFrame)?.speaker ?? null)
+    : speaking
+      ? 'main'
+      : null;
+  const mouth = speakingKey ? 0.5 + 0.5 * Math.sin(frame * 1.7) : 0;
   const progressPercent = Math.min(100, Math.max(0, (frame / Math.max(1, totalDurationInFrames)) * 100));
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#000000', fontFamily: 'Arial, Helvetica, sans-serif' }}>
       {scenes.map((scene, i) => (
         <Sequence key={i} from={scene.from} durationInFrames={scene.durationInFrames}>
-          <SceneView scene={scene} width={width} height={height} mouth={mouth} />
+          <SceneView scene={scene} width={width} height={height} speakingKey={speakingKey} mouth={mouth} />
         </Sequence>
       ))}
 
-      {audioSrc ? <Audio src={resolveSrc(audioSrc)} /> : null}
+      {audioTracks
+        ? audioTracks.map((track, i) => (
+            <Sequence key={`audio-${i}`} from={track.fromFrame} durationInFrames={track.durationInFrames}>
+              <Audio src={resolveSrc(track.src)} />
+            </Sequence>
+          ))
+        : audioSrc
+          ? <Audio src={resolveSrc(audioSrc)} />
+          : null}
 
       {/* Accroche : gros titre en haut, pendant les premières secondes */}
       {isHookActive ? (

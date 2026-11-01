@@ -1,8 +1,9 @@
 // Propriétés du montage dessin animé : décor, personnages placés et sous-titres par plan.
 // Fonctions pures, partagées par le pipeline (construction) et le moteur Remotion (affichage).
-import { CHARACTERS, characterById, type Expression, type Role, type SetId } from './catalog.ts';
+import { CHARACTERS, characterById, type CharacterLook, type Expression, type Role, type SetId } from './catalog.ts';
 import type { SceneDirection } from './direction.ts';
 import type { KaraokeWord } from '../types.ts';
+import type { StoryAction } from '../story.ts';
 import { FPS, alignedWords, hookFramesFor } from '../timeline.ts';
 import type { BoundaryEvent } from '../timeline.ts';
 
@@ -10,6 +11,8 @@ import type { BoundaryEvent } from '../timeline.ts';
 const TAIL_SECONDS = 0.8;
 
 export interface CartoonActor {
+  /** Clé de locuteur : identifiant du héros (ou « main » pour le personnage principal du mode simple). */
+  key: string;
   characterId: string;
   expression: Expression;
   /** Le personnage principal parle la voix off : sa bouche bouge pendant les mots. */
@@ -18,6 +21,10 @@ export interface CartoonActor {
   x: number;
   /** Taille relative (1 = taille de base). */
   scale: number;
+  /** Geste de la scène (mode histoire). */
+  action?: StoryAction;
+  /** Apparence propre au héros de l'histoire (absente pour les personnages du catalogue). */
+  look?: Partial<CharacterLook>;
 }
 
 export interface CartoonScene {
@@ -25,6 +32,20 @@ export interface CartoonScene {
   durationInFrames: number;
   set: SetId;
   actors: CartoonActor[];
+}
+
+/** Réplique à l'écran (mode histoire) : qui parle, et quand. */
+export interface CartoonUtterance {
+  speaker: string;
+  startFrame: number;
+  endFrame: number;
+}
+
+/** Une piste audio par réplique (mode histoire), posée à sa frame de départ. */
+export interface CartoonAudioTrack {
+  src: string;
+  fromFrame: number;
+  durationInFrames: number;
 }
 
 export interface CartoonProps {
@@ -40,10 +61,13 @@ export interface CartoonProps {
   showNiche: boolean;
   showProgress: boolean;
   scenes: CartoonScene[];
+  /** Mode histoire : répliques datées et pistes audio. Absents = voix unique et personnage principal. */
+  utterances?: CartoonUtterance[];
+  audioTracks?: CartoonAudioTrack[];
 }
 
 /** Disposition selon le nombre de personnages : le principal est toujours le premier de la liste. */
-const LAYOUT: Record<number, { x: number; scale: number }[]> = {
+export const LAYOUT: Record<number, { x: number; scale: number }[]> = {
   1: [{ x: 0.5, scale: 1.9 }],
   2: [
     { x: 0.3, scale: 1.6 },
@@ -74,6 +98,7 @@ export function cartoonScenes(
   return directions.map((dir, i) => {
     const layout = LAYOUT[dir.actors.length] ?? LAYOUT[1];
     const actors: CartoonActor[] = dir.actors.map((actor, k) => ({
+      key: actor.role === 'main' ? 'main' : actor.role,
       characterId: characterForRole(actor.role, main),
       expression: actor.expression,
       speaking: actor.role === 'main',
@@ -123,4 +148,9 @@ export function cartoonVideoProps(input: CartoonVideoInput): CartoonProps {
     showProgress: input.showProgress,
     scenes: cartoonScenes(input.directions, input.windows, input.mainCharacter),
   };
+}
+
+/** Disposition d'un nombre de personnages à l'écran (1 à 3). */
+export function cartoonLayout(count: number): { x: number; scale: number }[] {
+  return LAYOUT[count] ?? LAYOUT[1];
 }

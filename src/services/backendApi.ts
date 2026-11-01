@@ -163,6 +163,8 @@ export interface RenderRequest {
   style?: 'stock' | 'cartoon';
   /** Personnage principal du dessin animé (identifiant du catalogue). */
   mainCharacter?: string;
+  /** Histoire en dessin animé (héros, scènes, répliques) : remplace le script pour le montage. */
+  story?: import('../video-engine/story').Story;
 }
 
 /** Appel authentifié (jeton Firebase de l'utilisateur) vers le Worker. */
@@ -362,4 +364,19 @@ export async function mediaObjectUrl(id: string): Promise<string> {
   const res = await fetch(`${API_BASE}/api/media/${encodeURIComponent(id)}/file`, { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) throw new ApiError(res.status, 'media', `Aperçu indisponible (${res.status}).`);
   return URL.createObjectURL(await res.blob());
+}
+
+/** Sujets d'histoires proposés (liste de repli côté serveur si le modèle ne répond pas). */
+export async function getStorySubjects(): Promise<string[]> {
+  return (await authedCall<{ subjects: string[] }>('/api/story/subjects')).subjects;
+}
+
+/** Histoire en dessin animé, à partir d'un sujet (choisi ou écrit) ou d'un script fourni. */
+export async function generateStory(input: {
+  source: 'topic' | 'script';
+  topic?: string;
+  script?: string;
+  mode: 'narrator' | 'dialogue' | 'both';
+}): Promise<import('../video-engine/story').Story> {
+  return (await authedCall<{ story: import('../video-engine/story').Story }>('/api/story', { method: 'POST', body: input })).story;
 }
