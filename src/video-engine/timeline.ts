@@ -111,3 +111,97 @@ export function planSegments(totalFrames: number, count: number): { from: number
     durationInFrames: i === n - 1 ? totalFrames - base * (n - 1) : base,
   }));
 }
+
+const alignKey = (w: string): string =>
+  w
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+
+/**
+ * Mots du script, chacun avec le moment où il est prononcé. Le texte affiché est celui du script,
+ * pas celui lu par la voix. Un mot lu autrement (« 5 » lu « cinq », sigle épelé) n'est pas comparé
+ * à sa place : il est calé entre ses voisins reconnus. Sans timings de la voix, c'est la répartition habituelle.
+ */
+export function alignedWords(
+  events: BoundaryEvent[],
+  script: string,
+  audioSec: number,
+  fps: number = FPS,
+): KaraokeWord[] {
+  const scriptWords = splitWords(script);
+  const spoken = wordsFromBoundaries(events, script, audioSec, fps);
+  const n = scriptWords.length;
+  const m = spoken.length;
+  if (n === 0) return [];
+  if (m === 0) return wordsFromBoundaries([], script, audioSec, fps);
+
+  // Plus longue suite commune (LCS) entre les mots du script et les mots prononcés.
+  const a = scriptWords.map(alignKey);
+  const b = spoken.map((w) => alignKey(w.word));
+  const dp: Uint16Array[] = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = a[i] === b[j] && a[i] !== '' ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  const matchOf: number[] = new Array(n).fill(-1);
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j] && a[i] !== '' && dp[i][j] === dp[i + 1][j + 1] + 1) {
+      matchOf[i] = j;
+      i++;
+      j++;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      i++;
+    } else {
+      j++;
+    }
+  }
+
+  // Mots non reconnus : répartis linéairement entre les mots reconnus encadrants.
+  const endOfSpeech = spoken[m - 1].endFrame;
+  const starts: number[] = new Array(n).fill(0);
+  const ends: number[] = new Array(n).fill(0);
+  const anchors: { index: number; start: number; end: number }[] = [{ index: -1, start: 0, end: 0 }];
+  matchOf.forEach((jj, idx) => {
+    if (jj >= 0) anchors.push({ index: idx, start: spoken[jj].startFrame, end: spoken[jj].endFrame });
+  });
+  anchors.push({ index: n, start: endOfSpeech, end: endOfSpeech });
+  for (let k = 0; k < anchors.length - 1; k++) {
+    const from = anchors[k];
+    const to = anchors[k + 1];
+    if (from.index >= 0) {
+      starts[from.index] = from.start;
+      ends[from.index] = from.end;
+    }
+    const gap = to.index - from.index;
+    for (let idx = from.index + 1; idx < to.index; idx++) {
+      const t = (idx - from.index) / gap;
+      starts[idx] = Math.round(from.end + (to.start - from.end) * t);
+      ends[idx] = starts[idx];
+    }
+  }
+  const last = anchors[anchors.length - 2];
+  if (last.index >= 0) {
+    starts[last.index] = last.start;
+    ends[last.index] = last.end;
+  }
+
+  const words: KaraokeWord[] = scriptWords.map((word, idx) => ({
+    word,
+    startFrame: starts[idx],
+    endFrame: Math.max(starts[idx], ends[idx]),
+  }));
+  for (let idx = 0; idx < words.length; idx++) {
+    if (idx > 0 && words[idx].startFrame < words[idx - 1].startFrame) words[idx].startFrame = words[idx - 1].startFrame;
+    if (idx < words.length - 1) {
+      words[idx].endFrame = Math.max(words[idx].startFrame, words[idx + 1].startFrame - 1);
+    } else {
+      words[idx].endFrame = Math.max(words[idx].startFrame + 3, words[idx].endFrame);
+    }
+  }
+  return words;
+}
