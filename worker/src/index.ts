@@ -6,6 +6,8 @@ import { ANALYZE_MODEL, TTS_MODEL, dedupe, extractWorkersAiText } from './aiMode
 import { synthesizeSpeech } from './speech';
 import { KEYWORDS_SYSTEM, keywordsPrompt, parseKeywords } from './keywords';
 import { improveScript } from './improve';
+import { generateStory, suggestSubjects } from './storyGen';
+import { STORY_MODES, type StoryRequest } from './story';
 import { BRIEF_SYSTEM, buildBriefPrompt, parseBriefPlan } from './briefs';
 import { addUserMedia, cleanDescription, deleteUserMedia, listUserMedia, mediaFileForPipeline, mediaForJob, publicMedia, updateUserMedia, userMediaFile } from './media';
 import { fetchPublicMetadata, parseSourceUrl } from './inspiration';
@@ -468,6 +470,26 @@ async function handleTestAi(request: Request, env: Env): Promise<Response> {
 }
 
 /** Voix off pour le rendu (appel interne, secret de rendu). Renvoie le MP3 directement. */
+async function handleStorySubjects(request: Request, env: Env): Promise<Response> {
+  await requireFirebaseUser(request, env);
+  return respond(request, env, { subjects: await suggestSubjects(env) });
+}
+
+/** Histoire à partir d'un sujet (choisi ou écrit) ou d'un script fourni, dans le mode demandé. */
+async function handleStory(request: Request, env: Env): Promise<Response> {
+  await requireFirebaseUser(request, env);
+  const body = await readJson(request);
+  const source = body.source === 'script' ? 'script' : 'topic';
+  const mode = STORY_MODES.find((m) => m === body.mode);
+  if (!mode) throw new HttpError(400, 'invalid_param', 'Mode inconnu : narrator, dialogue ou both.');
+  const topic = typeof body.topic === 'string' ? body.topic.replace(/\s+/g, ' ').trim().slice(0, 200) : '';
+  const script = typeof body.script === 'string' ? body.script.trim().slice(0, 1500) : '';
+  if (source === 'topic' && topic.length < 5) throw new HttpError(400, 'invalid_param', 'Donne un sujet (au moins 5 caractères).');
+  if (source === 'script' && script.length < 10) throw new HttpError(400, 'invalid_param', 'Donne un script (au moins 10 caractères).');
+  const req: StoryRequest = { source, topic, script, mode };
+  return respond(request, env, { story: await generateStory(env, req) });
+}
+
 async function handleTtsFree(request: Request, env: Env): Promise<Response> {
   await requireInternal(request, env);
   const body = await readJson(request);
@@ -621,6 +643,8 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === '/api/inspiration' && method === 'POST') return handleAddInspiration(request, env);
   if (path === '/api/inspiration/analyze' && method === 'POST') return handleAnalyzeInspiration(request, env);
   if (path === '/api/analyze-style' && method === 'POST') return handleAnalyzeInspiration(request, env);
+  if (path === '/api/story/subjects' && method === 'GET') return handleStorySubjects(request, env);
+  if (path === '/api/story' && method === 'POST') return handleStory(request, env);
   if (path === '/api/test-ai' && method === 'GET') return handleTestAi(request, env);
   if (path === '/api/tts-free' && method === 'POST') return handleTtsFree(request, env);
   const inspirationId = path.match(/^\/api\/inspiration\/([0-9a-f-]{36})$/);
