@@ -5,6 +5,7 @@ import { callModel, generateNicheScripts, rewriteScript, AI_MODEL, runWorkersAi,
 import { ANALYZE_MODEL, TTS_MODEL, dedupe, extractWorkersAiText } from './aiModels';
 import { synthesizeSpeech } from './speech';
 import { KEYWORDS_SYSTEM, keywordsPrompt, parseKeywords } from './keywords';
+import { improveScript } from './improve';
 import { BRIEF_SYSTEM, buildBriefPrompt, parseBriefPlan } from './briefs';
 import { addUserMedia, cleanDescription, deleteUserMedia, listUserMedia, mediaFileForPipeline, mediaForJob, publicMedia, updateUserMedia, userMediaFile } from './media';
 import { fetchPublicMetadata, parseSourceUrl } from './inspiration';
@@ -175,6 +176,16 @@ async function handleMediaFile(request: Request, env: Env, id: string): Promise<
 async function handleInternalMedia(request: Request, env: Env, id: string): Promise<Response> {
   await requireInternal(request, env);
   return mediaFileForPipeline(env, id);
+}
+
+/** Script amélioré pour le rendu (appel interne). Renvoie le script d'origine si l'amélioration échoue. */
+async function handleInternalImproveScript(request: Request, env: Env): Promise<Response> {
+  await requireInternal(request, env);
+  const body = await readJson(request);
+  const script = typeof body.script === 'string' ? body.script.trim().slice(0, 1500) : '';
+  if (script.length < 10) throw new HttpError(400, 'invalid_param', 'Script trop court.');
+  const niche = typeof body.niche === 'string' && /^[a-z]{2,20}$/.test(body.niche) ? body.niche : 'general';
+  return respond(request, env, await improveScript(env, script, niche));
 }
 
 async function handleInternalBriefs(request: Request, env: Env): Promise<Response> {
@@ -620,6 +631,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === '/api/script-overrides' && method === 'GET') return handleGetOverrides(request, env);
   if (path === '/api/script-override' && method === 'PUT') return handlePutOverride(request, env);
   if (path === '/internal/briefs' && method === 'POST') return handleInternalBriefs(request, env);
+  if (path === '/internal/improve-script' && method === 'POST') return handleInternalImproveScript(request, env);
   if (path === '/api/media' && method === 'GET') return handleMediaList(request, env);
   if (path === '/api/media' && method === 'POST') return handleMediaUpload(request, env, url);
   const mediaMatch = path.match(/^\/api\/media\/([0-9a-f-]{36})(\/file)?$/);

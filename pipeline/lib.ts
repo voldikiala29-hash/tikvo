@@ -167,6 +167,11 @@ export class WorkerApi {
   }
 
   /** Une requête Pixabay et/ou un média personnel par phrase (null = rien pour cette phrase). */
+  /** Script réécrit pour accrocher davantage, sans changer les faits (le script d'origine si ça échoue). */
+  improveScript(script: string, niche: string): Promise<{ script: string; improved: boolean }> {
+    return this.request<{ script: string; improved: boolean }>('POST', '/internal/improve-script', { script, niche });
+  }
+
   briefs(
     lines: string[],
     niche: string,

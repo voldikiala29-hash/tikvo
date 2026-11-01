@@ -119,12 +119,19 @@ async function main(): Promise<void> {
   const lap = (label: string) => console.log(`[temps] ${label} : ${((Date.now() - t0) / 1000).toFixed(1)} s depuis le début`);
 
   // 1. Voix off : c'est elle qui fixe la durée de la vidéo.
+  // 0. Script amélioré : c'est lui qui est lu, sous-titré et cherché sur Pixabay. Repli : le script d'origine.
+  await reporter.report('Amélioration du script…', 3, true);
+  const improvement = await api
+    .improveScript(params.script, params.niche.id)
+    .catch(() => ({ script: params.script, improved: false }));
+  const script = improvement.script;
+
   await reporter.report('Synthèse de la voix off (Edge TTS, puis MeloTTS en secours)…', 5, true);
   // Voix et style propres à la niche, sauf choix explicite pour ce rendu. MeloTTS n'a qu'une voix par langue :
   // seuls les réglages ne s'appliquent qu'au moteur de secours (gTTS ne règle ni voix ni vitesse).
   const chosen = resolveVoice(params.niche.id, settings.voice, settings.voiceStyle);
   const voice = await synthesizeVoice({
-    text: params.script,
+    text: script,
     voice: chosen.voice,
     rate: chosen.rate,
     pitch: chosen.pitch,
@@ -143,6 +150,7 @@ async function main(): Promise<void> {
   if (voice.engine !== 'edge') {
     await reporter.report(`${voiceNote} : Edge TTS indisponible, sous-titres répartis sur la durée`, 12, true);
   }
+  if (improvement.improved) voiceNote = `${voiceNote} · script amélioré`;
   if (voice.audioSec + TAIL_SECONDS > MAX_VIDEO_SECONDS) {
     throw new Error(`La voix dure ${Math.round(voice.audioSec)} s : raccourcis le script (maximum ${MAX_VIDEO_SECONDS - 1} s).`);
   }
@@ -152,9 +160,9 @@ async function main(): Promise<void> {
 
   // 2. Plans. Priorité au script : une recherche par phrase, pour que l'image suive ce qui est dit.
   const pixabayKey = requireEnv('PEXELS_API_KEY'); // nom du secret conservé pendant la transition
-  const lines = splitScenes(params.script);
+  const lines = splitScenes(script);
   const plan = await api
-    .briefs(lines, params.niche.id, params.media ?? [], params.script)
+    .briefs(lines, params.niche.id, params.media ?? [], script)
     .catch((err: unknown) => {
       console.warn('Plans par phrase indisponibles, recherche par niche :', err instanceof Error ? err.message : err);
       return null;
@@ -182,7 +190,7 @@ async function main(): Promise<void> {
     await reporter.report(`${precise}/${lines.length} phrases illustrées par un plan précis`, 20, true);
     clips = perScene.filter((c): c is SceneClip => c !== null);
     if (clips.length < MIN_CLIPS) throw new Error(`Moins de ${MIN_CLIPS} plans exploitables après téléchargement.`);
-    const timing = alignedWords(voice.events, params.script, voice.audioSec);
+    const timing = alignedWords(voice.events, script, voice.audioSec);
     scenes = mergeDropped(sceneWindows(lines, timing, Math.ceil(totalSec * FPS)), perScene.map((c) => c !== null)).windows;
   } else {
     // Repli : recherche générique par niche, nombre de plans selon la durée.
@@ -207,7 +215,7 @@ async function main(): Promise<void> {
   const props = composeProps({
     hook: params.hook,
     nicheName: params.niche.name,
-    script: params.script,
+    script,
     events: voice.events,
     audioSec: voice.audioSec,
     audioSrc: 'audio/voice.mp3',
