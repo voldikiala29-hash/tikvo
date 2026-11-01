@@ -7,7 +7,7 @@ const MIN_AUDIO_BYTES = 1000;
 
 /**
  * Voix off gratuite via MeloTTS (Workers AI). Renvoie le MP3.
- * Si le binding R2 « MEDIA » est actif et qu'un identifiant de job est fourni, une copie est rangée dans voice/{jobId}.mp3.
+ * Si le binding R2 « MEDIA_BUCKET » est actif et qu'un identifiant de job est fourni, une copie est rangée dans voice/{jobId}.mp3.
  */
 export async function synthesizeSpeech(env: Env, rawText: string, lang: string, jobId: string | null): Promise<Uint8Array> {
   const text = rawText.replace(/\s+/g, ' ').trim().slice(0, MAX_CHARS);
@@ -17,9 +17,9 @@ export async function synthesizeSpeech(env: Env, rawText: string, lang: string, 
   if (audio.byteLength < MIN_AUDIO_BYTES) {
     throw new HttpError(502, 'tts_failed', 'La voix Workers AI n’a renvoyé aucun audio exploitable.');
   }
-  if (jobId && env.MEDIA) {
+  if (jobId && env.MEDIA_BUCKET) {
     try {
-      await env.MEDIA.put(`voice/${jobId}.mp3`, audio, { httpMetadata: { contentType: 'audio/mpeg' } });
+      await env.MEDIA_BUCKET.put(`voice/${jobId}.mp3`, audio, { httpMetadata: { contentType: 'audio/mpeg' } });
     } catch (err) {
       // Copie facultative : l'audio part quand même vers le rendu.
       console.warn('[tts] copie R2 ignorée', err instanceof Error ? err.message : err);

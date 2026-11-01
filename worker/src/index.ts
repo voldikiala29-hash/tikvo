@@ -4,6 +4,7 @@ import { createRender, getRender, listDayRenders, parseRenderInput } from './ren
 import { callModel, generateNicheScripts, rewriteScript, AI_MODEL, runWorkersAi, textModels } from './scripts';
 import { ANALYZE_MODEL, TTS_MODEL, dedupe, extractWorkersAiText } from './aiModels';
 import { synthesizeSpeech } from './speech';
+import { generateVideo, parseVideoInput, readGeneratedVideo } from './video';
 import { BRIEF_SYSTEM, buildBriefPrompt, parseBriefPlan } from './briefs';
 import { addUserMedia, cleanDescription, deleteUserMedia, listUserMedia, mediaFileForPipeline, mediaForJob, publicMedia, updateUserMedia, userMediaFile } from './media';
 import { fetchPublicMetadata, parseSourceUrl } from './inspiration';
@@ -434,6 +435,21 @@ async function handleTtsFree(request: Request, env: Env): Promise<Response> {
   return new Response(audio, { headers: { 'Content-Type': 'audio/mpeg', 'X-Voice-Engine': 'melotts' } });
 }
 
+/** Vidéo IA optionnelle (payante, désactivée par défaut) : prompt, format, durée. */
+async function handleGenerateVideoFree(request: Request, env: Env): Promise<Response> {
+  const user = await requireFirebaseUser(request, env);
+  const input = parseVideoInput(await readJson(request));
+  const result = await generateVideo(env, user.uid, input);
+  return respond(request, env, result);
+}
+
+/** Vidéo générée par l'utilisateur connecté. */
+async function handleGeneratedFile(request: Request, env: Env, id: string): Promise<Response> {
+  const user = await requireFirebaseUser(request, env);
+  const object = await readGeneratedVideo(env, user.uid, id);
+  return new Response(object.body, { headers: { 'Content-Type': 'video/mp4', 'Cache-Control': 'private, max-age=3600' } });
+}
+
 async function handleAnalyzeInspiration(request: Request, env: Env): Promise<Response> {
   const user = await requireFirebaseUser(request, env);
   const rows = await env.DB.prepare('SELECT platform, title, author, notes FROM inspiration_sources WHERE uid = ? LIMIT 20')
@@ -578,6 +594,9 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === '/api/analyze-style' && method === 'POST') return handleAnalyzeInspiration(request, env);
   if (path === '/api/test-ai' && method === 'GET') return handleTestAi(request, env);
   if (path === '/api/tts-free' && method === 'POST') return handleTtsFree(request, env);
+  if (path === '/api/generate-video-free' && method === 'POST') return handleGenerateVideoFree(request, env);
+  const generatedMatch = path.match(/^\/api\/generated\/([0-9a-f-]{36})$/);
+  if (generatedMatch && method === 'GET') return handleGeneratedFile(request, env, generatedMatch[1]);
   const inspirationId = path.match(/^\/api\/inspiration\/([0-9a-f-]{36})$/);
   if (inspirationId && method === 'PUT') return handleUpdateInspiration(request, env, inspirationId[1]);
   if (inspirationId && method === 'DELETE') return handleDeleteInspiration(request, env, inspirationId[1]);

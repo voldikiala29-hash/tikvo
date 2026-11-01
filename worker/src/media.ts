@@ -20,8 +20,8 @@ export function mediaKey(uid: string, id: string, ext: string): string {
 
 /** Le stockage n'existe qu'une fois le bucket R2 activé et lié au Worker. */
 function bucketOrFail(env: Env) {
-  if (!env.MEDIA) throw new HttpError(503, 'media_disabled', 'Le stockage des photos et vidéos n’est pas encore activé.');
-  return env.MEDIA;
+  if (!env.MEDIA_BUCKET) throw new HttpError(503, 'media_disabled', 'Le stockage des photos et vidéos n’est pas encore activé.');
+  return env.MEDIA_BUCKET;
 }
 
 export function publicMedia(row: MediaRow) {
