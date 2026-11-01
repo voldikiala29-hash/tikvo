@@ -131,6 +131,10 @@ async function renderStoryJob(options: {
       jobs.push({ speaker: 'narrator', sceneIndex, text: scene.narration, expression: 'neutre', voice: narratorVoice.voice, rate: narratorVoice.rate, pitch: narratorVoice.pitch });
     }
     for (const line of scene.lines) {
+      if (line.speaker === 'narrator') {
+        jobs.push({ speaker: 'narrator', sceneIndex, text: line.text, expression: 'neutre', voice: narratorVoice.voice, rate: narratorVoice.rate, pitch: narratorVoice.pitch });
+        continue;
+      }
       const idx = story.characters.findIndex((c) => c.id === line.speaker);
       const hv = heroVoice(story.characters[idx], idx);
       jobs.push({ speaker: line.speaker, sceneIndex, text: line.text, expression: line.expression, voice: hv.voice, rate: hv.rate, pitch: hv.pitch });
