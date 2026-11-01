@@ -26,7 +26,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           # Supprime l'éventuelle règle précédente (absente la première fois), puis l'ajoute.
-          npx -y wrangler@4 r2 bucket lifecycle remove tikvo-media --force || true
+          npx -y wrangler@4 r2 bucket lifecycle remove tikvo-media --name expire-7-days --force || true
           npx -y wrangler@4 r2 bucket lifecycle add tikvo-media expire-7-days --expire-days 7 --force
       - name: Vérifie la règle
         env:
