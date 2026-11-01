@@ -175,6 +175,18 @@ export class WorkerApi {
     return this.request<{ queries: (string | null)[]; mediaIds: (string | null)[] }>('POST', '/internal/briefs', { lines, niche, media });
   }
 
+  /** Voix off gratuite (MeloTTS, via le Worker) : écrit le MP3 dans dest. Une seule tentative, pour ne pas consommer deux fois. */
+  async speech(text: string, lang: string, jobId: string, dest: string): Promise<void> {
+    const res = await fetch(`${this.base}/api/tts-free`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${this.secret}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, lang, jobId }),
+    });
+    if (!res.ok) throw new Error(`Voix Workers AI : HTTP ${res.status}`);
+    await mkdir(path.dirname(dest), { recursive: true });
+    await writeFile(dest, Buffer.from(await res.arrayBuffer()));
+  }
+
   /** Télécharge un média personnel (authentifié par le secret de rendu). */
   async download(id: string, dest: string): Promise<void> {
     const res = await fetch(`${this.base}/internal/media/${id}`, { headers: { Authorization: `Bearer ${this.secret}` } });

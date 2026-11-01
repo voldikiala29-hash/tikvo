@@ -9,12 +9,12 @@ import asyncio
 import json
 import sys
 
-import edge_tts
-
 GTTS_LANG = "fr"
 
 
 async def synthesize(text: str, voice: str, rate: str, pitch: str, boundary: str):
+    import edge_tts
+
     try:
         communicate = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch, boundary=boundary)
     except TypeError:
@@ -73,6 +73,7 @@ async def synthesize_edge_all(text: str, voice: str, rate: str, pitch: str):
 
 async def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--engine", default="edge", choices=["edge", "gtts"])
     parser.add_argument("--voice", required=True)
     parser.add_argument("--rate", default="+6%")
     parser.add_argument("--pitch", default="+0Hz")
@@ -88,14 +89,19 @@ async def main() -> int:
         return 1
 
     engine = "edge"
-    try:
-        audio, events, kind = await synthesize_edge_all(text, args.voice, args.rate, args.pitch)
-    except Exception as exc:  # noqa: BLE001
-        if not is_edge_blocked(exc):
-            raise
-        print(f"Edge TTS 403 ({exc}) : Edge TTS fallback gTTS", file=sys.stderr)
+    if args.engine == "gtts":
+        # Chemin de secours direct (voix Workers AI indisponible) : pas d'appel à Edge TTS.
         audio = synthesize_gtts(text, args.audio_out)
         events, kind, engine = [], "none", "gtts"
+    else:
+        try:
+            audio, events, kind = await synthesize_edge_all(text, args.voice, args.rate, args.pitch)
+        except Exception as exc:  # noqa: BLE001
+            if not is_edge_blocked(exc):
+                raise
+            print(f"Edge TTS 403 ({exc}) : Edge TTS fallback gTTS", file=sys.stderr)
+            audio = synthesize_gtts(text, args.audio_out)
+            events, kind, engine = [], "none", "gtts"
 
     with open(args.audio_out, "wb") as handle:
         handle.write(audio)

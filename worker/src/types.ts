@@ -24,8 +24,9 @@ export interface Env {
     put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
   };
   FIREBASE_API_KEY?: string;
-  // Workers AI (binding « AI » du wrangler.toml) : Meta Llama.
+  // Workers AI (binding « AI » du wrangler.toml). Liste des modèles de texte, du meilleur au secours.
   AI?: { run(model: string, input: Record<string, unknown>): Promise<unknown> };
+  AI_TEXT_MODELS?: string;
   // Stockage des photos et vidéos de l'utilisateur (facultatif tant que R2 n'est pas activé).
   MEDIA?: R2Bucket;
   // Fournisseurs gratuits (facultatifs) : sans clé, ils sont ignorés.
