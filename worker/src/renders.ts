@@ -4,6 +4,7 @@ import { dispatchWorkflow } from './github';
 import { HttpError, Env } from './types';
 import { RenderSettings, resolveRenderSettings } from './renderSettings';
 import { resolveVoice } from './voices';
+import { STORY_MODES, storyText, validateStory, type Story } from '../../src/video-engine/story';
 
 const DAILY_LIMIT = 60;
 
@@ -33,6 +34,8 @@ export interface RenderInput {
   style: 'stock' | 'cartoon';
   /** Personnage principal du dessin animé (identifiant du catalogue). */
   mainCharacter: string;
+  /** Histoire en dessin animé, validée (absente pour les autres rendus). */
+  story?: Story;
 }
 
 export interface RenderView {
@@ -90,6 +93,19 @@ function text(value: unknown, min: number, max: number, field: string): string {
   return t;
 }
 
+/** Histoire envoyée avec le rendu : validée comme à la génération, mode lu dans l'histoire elle-même. */
+function parseStoryField(value: unknown): Story | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'object') throw bad('story');
+  const mode = STORY_MODES.find((m) => m === (value as { mode?: unknown }).mode);
+  if (!mode) throw bad('story');
+  try {
+    return validateStory(value, mode);
+  } catch (err) {
+    throw new HttpError(400, 'invalid_param', `Histoire invalide : ${err instanceof Error ? err.message : 'format inattendu'}`);
+  }
+}
+
 export function parseRenderInput(body: Record<string, unknown>): RenderInput {
   const nicheId = text(body.nicheId, 2, 20, 'nicheId');
   if (!/^[a-z]+$/.test(nicheId)) throw bad('nicheId');
@@ -98,10 +114,12 @@ export function parseRenderInput(body: Record<string, unknown>): RenderInput {
   const videoKey = text(body.videoKey, 12, 16, 'videoKey');
   if (!/^\d{4}-\d{2}-\d{2}-\d$/.test(videoKey)) throw bad('videoKey');
 
+  const story = parseStoryField(body.story);
   return {
     title: text(body.title, 1, 150, 'title'),
-    hook: text(body.hook, 1, 250, 'hook'),
-    script: text(body.script, 10, 1500, 'script'),
+    hook: story ? story.hook : text(body.hook, 1, 250, 'hook'),
+    script: story ? storyText(story).slice(0, 1500) : text(body.script, 10, 1500, 'script'),
+    story,
     pexelsQuery: text(body.pexelsQuery || 'lifestyle', 1, 100, 'pexelsQuery'),
     nicheId,
     nicheName: text(body.nicheName, 1, 40, 'nicheName'),
@@ -141,9 +159,10 @@ function toView(row: JobRow): RenderView {
 /** Même script et mêmes réglages qu'un rendu existant ? */
 function sameRequest(paramsJson: string, input: RenderInput): boolean {
   try {
-    const p = JSON.parse(paramsJson) as { script?: string; settings?: unknown; storyboard?: unknown; style?: string; mainCharacter?: string };
+    const p = JSON.parse(paramsJson) as { script?: string; settings?: unknown; storyboard?: unknown; style?: string; mainCharacter?: string; story?: unknown };
     return (
       p.script === input.script &&
+      JSON.stringify(p.story ?? null) === JSON.stringify(input.story ?? null) &&
       (p.style ?? 'stock') === input.style &&
       (input.style === 'stock' || (p.mainCharacter ?? 'employe') === input.mainCharacter) &&
       JSON.stringify(resolveRenderSettings(p.settings)) === JSON.stringify(input.settings) &&
@@ -202,6 +221,7 @@ export async function createRender(
     storyboard: input.storyboard,
     style: input.style,
     mainCharacter: input.mainCharacter,
+    story: input.story ?? null,
   };
   await env.DB.prepare(
     `INSERT INTO jobs (id, open_id, status, step, progress, params, created_at, updated_at)

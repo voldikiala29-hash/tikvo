@@ -1,7 +1,7 @@
 // Génération des histoires et des sujets proposés : appels au modèle de texte, avec validation.
 import { callModel } from './scripts';
 import { HttpError, type Env } from './types';
-import { STORY_SYSTEM, SUBJECT_FALLBACK, parseStory, parseSubjects, storyPrompt, subjectsPrompt, type Story, type StoryRequest } from './story';
+import { STORY_SYSTEM, SUBJECT_FALLBACK, parseStory, parseSubjects, storyPrompt, subjectsPrompt, type Story, type StoryRequest } from '../../src/video-engine/story';
 
 const ATTEMPTS = 2;
 

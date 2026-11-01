@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseStory, parseSubjects, storyPrompt, SUBJECT_FALLBACK } from '../../worker/src/story.ts';
+import { parseStory, parseSubjects, storyPrompt, SUBJECT_FALLBACK } from '../../src/video-engine/story.ts';
 
 const hero = (id: string, name: string) => ({
   id,

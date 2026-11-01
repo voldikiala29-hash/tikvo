@@ -2,7 +2,8 @@
 // Pas de dépendance à Remotion : utilisable dans le moteur de rendu comme sur le site.
 import React from 'react';
 import type { Expression, HairStyle } from './catalog.ts';
-import { characterById } from './catalog.ts';
+import { characterById, type CharacterLook } from './catalog.ts';
+import { REST_POSE, type Pose } from './poses.ts';
 
 const INK = '#111111';
 const STROKE = 5;
@@ -136,33 +137,73 @@ export interface CharacterProps {
   expression?: Expression;
   /** 0 = bouche au repos ; entre 0 et 1 = bouche qui parle. */
   mouthOpen?: number;
+  /** Pose du corps et des bras (repos par défaut). */
+  pose?: Partial<Pose>;
+  /** Apparence propre (héros d'une histoire) : complète ou remplace celle du catalogue. */
+  look?: Partial<CharacterLook>;
   /** Hauteur en pixels (la largeur suit le dessin). */
   height?: number;
   style?: React.CSSProperties;
 }
 
-export const Character: React.FC<CharacterProps> = ({ characterId, expression = 'neutre', mouthOpen = 0, height = 360, style }) => {
-  const look = characterById(characterId);
+/** Ne garde que les valeurs renseignées, pour qu'une valeur absente ne remplace pas celle du catalogue. */
+function definedOnly<T extends object>(value: T | undefined): Partial<T> {
+  if (!value) return {};
+  return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as Partial<T>;
+}
+
+const SHOULDER_L = { x: 66, y: 186 };
+const SHOULDER_R = { x: 134, y: 186 };
+const ARM_LENGTH = 88;
+
+/** Un bras : segment depuis l'épaule, angle en degrés (0 = le long du corps). */
+function Arm({ shoulder, angle, side, shirt }: { shoulder: { x: number; y: number }; angle: number; side: 'L' | 'R'; shirt: string; skin: string }): React.ReactElement {
+  const rad = (angle * Math.PI) / 180;
+  const dir = side === 'L' ? -1 : 1;
+  const end = { x: shoulder.x + dir * ARM_LENGTH * Math.sin(rad), y: shoulder.y + ARM_LENGTH * Math.cos(rad) };
+  return (
+    <g>
+      <line x1={shoulder.x} y1={shoulder.y} x2={end.x} y2={end.y} stroke={INK} strokeWidth={26} strokeLinecap="round" />
+      <line x1={shoulder.x} y1={shoulder.y} x2={end.x} y2={end.y} stroke={shirt} strokeWidth={18} strokeLinecap="round" />
+      <circle cx={end.x} cy={end.y} r={11} fill="#FFFFFF" stroke={INK} strokeWidth={4} />
+    </g>
+  );
+}
+
+export const Character: React.FC<CharacterProps> = ({ characterId, expression = 'neutre', mouthOpen = 0, pose, look: custom, height = 360, style }) => {
+  const look: CharacterLook = { ...characterById(characterId), ...definedOnly(custom) };
+  const p: Pose = { ...REST_POSE, ...pose };
   const width = (height * 200) / 360;
   return (
-    <svg viewBox="0 0 200 360" width={width} height={height} style={style} aria-label={look.name}>
-      {/* Corps */}
-      <path d="M30 360 L30 240 Q30 170 100 165 Q170 170 170 240 L170 360 Z" fill={look.shirt} stroke={INK} strokeWidth={STROKE} />
-      <path d="M84 165 L100 200 L116 165" fill="#FFFFFF" stroke={INK} strokeWidth={4} />
-      {look.tie && <polygon points="96,200 104,200 108,232 100,246 92,232" fill={look.tie} stroke={INK} strokeWidth={3} />}
-      {/* Tête */}
-      <circle cx={100} cy={100} r={68} fill={look.skin} stroke={INK} strokeWidth={STROKE} />
-      <Hair style={look.hair} color={look.hairColor} />
-      <Brows expression={expression} />
-      <Eyes expression={expression} />
-      {look.glasses && (
-        <g fill="none" stroke={INK} strokeWidth={4}>
-          <circle cx={76} cy={102} r={15} />
-          <circle cx={124} cy={102} r={15} />
-          <line x1={91} y1={102} x2={109} y2={102} />
-        </g>
-      )}
-      <Mouth expression={expression} open={mouthOpen} />
+    <svg viewBox="0 0 200 360" width={width} height={height} style={style} aria-label={look.name} overflow="visible">
+      <g transform={`translate(${p.shakeX} ${p.bodyY}) rotate(${p.tilt} 100 300)`}>
+        {/* Corps */}
+        <path d="M30 360 L30 240 Q30 170 100 165 Q170 170 170 240 L170 360 Z" fill={look.shirt} stroke={INK} strokeWidth={STROKE} />
+        <path d="M84 165 L100 200 L116 165" fill="#FFFFFF" stroke={INK} strokeWidth={4} />
+        {look.tie && <polygon points="96,200 104,200 108,232 100,246 92,232" fill={look.tie} stroke={INK} strokeWidth={3} />}
+        {/* Bras */}
+        <Arm shoulder={SHOULDER_L} angle={p.armLeft} side="L" shirt={look.shirt} skin={look.skin} />
+        <Arm shoulder={SHOULDER_R} angle={p.armRight} side="R" shirt={look.shirt} skin={look.skin} />
+        {/* Tête */}
+        <circle cx={100} cy={100} r={68} fill={look.skin} stroke={INK} strokeWidth={STROKE} />
+        <Hair style={look.hair} color={look.hairColor} />
+        <Brows expression={expression} />
+        <Eyes expression={expression} />
+        {look.glasses && (
+          <g fill="none" stroke={INK} strokeWidth={4}>
+            <circle cx={76} cy={102} r={15} />
+            <circle cx={124} cy={102} r={15} />
+            <line x1={91} y1={102} x2={109} y2={102} />
+          </g>
+        )}
+        <Mouth expression={expression} open={mouthOpen} />
+        {p.tears && (
+          <g fill="#7CC4F2" stroke={INK} strokeWidth={2}>
+            <path d="M68 124 Q64 136 68 142 Q74 136 68 124 Z" />
+            <path d="M132 124 Q128 136 132 142 Q138 136 132 124 Z" />
+          </g>
+        )}
+      </g>
     </svg>
   );
 };

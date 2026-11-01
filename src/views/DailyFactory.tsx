@@ -25,6 +25,7 @@ import { firstLine, scriptFromAI } from '../services/scriptText';
 import { parseScriptPaste, type ImportedScript } from '../services/scriptImport';
 import { VOICES, VOICE_STYLES, resolveVoice } from '../video-engine/voices';
 import { parseStoryboard } from '../video-engine/storyboard';
+import { StoryPanel } from '../components/StoryPanel';
 import { CHARACTERS, DEFAULT_MAIN_CHARACTER } from '../video-engine/cartoon/catalog';
 import { Character } from '../video-engine/cartoon/Character';
 import {
@@ -489,6 +490,15 @@ const DailyVideoCard: React.FC<DailyVideoCardProps> = ({
             </span>
             {board.errors.length > 0 && <span className="block text-[11px] text-red-400 mt-1">{board.errors[0]}</span>}
           </label>
+
+          <StoryPanel
+            day={date}
+            videoKey={videoKey}
+            nicheId={video.niche}
+            nicheName={nicheLabel(video.niche)}
+            settings={{ ...settings, voice: voiceId, voiceStyle: styleId }}
+            onRender={onRender}
+          />
 
           <div className="space-y-2">
             <span className="block text-[11px] text-gray-400">Style de la vidéo</span>

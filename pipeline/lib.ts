@@ -121,6 +121,8 @@ export interface JobData {
     pexelsIds?: number[];
     /** Variante de recréation : 0 = rendu d'origine. */
     variant?: number;
+    /** Histoire en dessin animé (mode histoire) : héros, scènes et répliques. */
+    story?: unknown;
     /** Style de montage : plans Pixabay (défaut) ou dessin animé. */
     style?: 'stock' | 'cartoon';
     /** Personnage principal du dessin animé (identifiant du catalogue). */
