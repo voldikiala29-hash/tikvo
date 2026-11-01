@@ -157,6 +157,8 @@ export interface RenderRequest {
   /** Recréation : ignore le rendu existant et prend d'autres clips. */
   force?: boolean;
   variant?: number;
+  /** Plans voulus, dans l'ordre (facultatif). */
+  storyboard?: { text: string; seconds: number | null }[];
 }
 
 /** Appel authentifié (jeton Firebase de l'utilisateur) vers le Worker. */

@@ -7,6 +7,12 @@ import { resolveVoice } from './voices';
 
 const DAILY_LIMIT = 60;
 
+/** Un plan voulu par l'utilisateur ; seconds = null : durée répartie automatiquement. */
+export interface StoryboardShot {
+  text: string;
+  seconds: number | null;
+}
+
 export interface RenderInput {
   title: string;
   hook: string;
@@ -21,6 +27,8 @@ export interface RenderInput {
   variant: number;
   /** Photos et vidéos de l'utilisateur, décrites : le pipeline choisit celles qui montrent la phrase. */
   media?: unknown[];
+  /** Plans voulus, dans l'ordre (vide = plans issus du script). */
+  storyboard: StoryboardShot[];
 }
 
 export interface RenderView {
@@ -51,6 +59,26 @@ interface JobRow {
 
 const bad = (field: string) => new HttpError(400, 'invalid_param', `Champ invalide : ${field}.`);
 
+const MAX_SHOTS = 8;
+
+function storyboardInput(value: unknown): StoryboardShot[] {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value) || value.length > MAX_SHOTS) throw bad('storyboard');
+  return value.map((item) => {
+    if (!item || typeof item !== 'object') throw bad('storyboard');
+    const shot = item as Record<string, unknown>;
+    const shotText = text(shot.text, 3, 160, 'storyboard');
+    let seconds: number | null = null;
+    if (shot.seconds !== undefined && shot.seconds !== null) {
+      if (typeof shot.seconds !== 'number' || !Number.isFinite(shot.seconds) || shot.seconds < 1 || shot.seconds > 15) {
+        throw bad('storyboard');
+      }
+      seconds = Math.round(shot.seconds * 10) / 10;
+    }
+    return { text: shotText, seconds };
+  });
+}
+
 function text(value: unknown, min: number, max: number, field: string): string {
   if (typeof value !== 'string') throw bad(field);
   const t = value.trim();
@@ -77,6 +105,7 @@ export function parseRenderInput(body: Record<string, unknown>): RenderInput {
     videoKey,
     settings: resolveRenderSettings(body.settings),
     variant: Number.isInteger(body.variant) ? Math.min(999, Math.max(0, Number(body.variant))) : 0,
+    storyboard: storyboardInput(body.storyboard),
   };
 }
 
@@ -105,8 +134,12 @@ function toView(row: JobRow): RenderView {
 /** Même script et mêmes réglages qu'un rendu existant ? */
 function sameRequest(paramsJson: string, input: RenderInput): boolean {
   try {
-    const p = JSON.parse(paramsJson) as { script?: string; settings?: unknown };
-    return p.script === input.script && JSON.stringify(resolveRenderSettings(p.settings)) === JSON.stringify(input.settings);
+    const p = JSON.parse(paramsJson) as { script?: string; settings?: unknown; storyboard?: unknown };
+    return (
+      p.script === input.script &&
+      JSON.stringify(resolveRenderSettings(p.settings)) === JSON.stringify(input.settings) &&
+      JSON.stringify(p.storyboard ?? []) === JSON.stringify(input.storyboard)
+    );
   } catch {
     return false;
   }
@@ -157,6 +190,7 @@ export async function createRender(
     settings: input.settings,
     variant: input.variant,
     media: input.media ?? [],
+    storyboard: input.storyboard,
   };
   await env.DB.prepare(
     `INSERT INTO jobs (id, open_id, status, step, progress, params, created_at, updated_at)

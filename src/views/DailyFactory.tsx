@@ -24,6 +24,7 @@ import { carryOverrides, nichesOf, totalOf, withNicheForVideo, withProgramNiches
 import { firstLine, scriptFromAI } from '../services/scriptText';
 import { parseScriptPaste, type ImportedScript } from '../services/scriptImport';
 import { VOICES, VOICE_STYLES, resolveVoice } from '../video-engine/voices';
+import { parseStoryboard } from '../video-engine/storyboard';
 import {
   ASPECTS,
   CLIP_CHOICES,
@@ -292,6 +293,16 @@ const DailyVideoCard: React.FC<DailyVideoCardProps> = ({
   const videoKey = `${date}-${index}`;
   const overrideKey = `${programId}|${date}|${index}`;
   const [script, setScript] = useState(savedScript);
+  // Storyboard : plans voulus, gardés par carte (navigateur uniquement, pour ne pas les perdre au rechargement).
+  const storyboardKey = `tikvo.storyboard.${videoKey}`;
+  const [storyboardText, setStoryboardText] = useState(() => {
+    try {
+      return window.localStorage.getItem(storyboardKey) ?? '';
+    } catch {
+      return '';
+    }
+  });
+  const board = parseStoryboard(storyboardText);
   const [rewriting, setRewriting] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -345,10 +356,15 @@ const DailyVideoCard: React.FC<DailyVideoCardProps> = ({
   };
 
   const generate = async (recreate = false) => {
+    if (board.errors.length > 0) {
+      setError(board.errors[0]);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       const created = await createRender({
+        storyboard: board.shots.length > 0 ? board.shots : undefined,
         title: video.title,
         hook: hookOverride || firstLine(script) || video.hook,
         script: script.trim(),
@@ -422,6 +438,31 @@ const DailyVideoCard: React.FC<DailyVideoCardProps> = ({
               rows={5}
               className="w-full rounded-xl bg-black/40 border border-white/10 p-2.5 text-xs text-gray-200 leading-relaxed focus:outline-none focus:border-[#00FFC6]/50"
             />
+          </label>
+
+          <label className="block">
+            <span className="flex items-center justify-between text-[11px] text-gray-400 mb-1">
+              <span>Plans voulus (facultatif)</span>
+              <span>{board.shots.length} plan(s)</span>
+            </span>
+            <textarea
+              value={storyboardText}
+              onChange={(e) => {
+                setStoryboardText(e.target.value);
+                try {
+                  window.localStorage.setItem(storyboardKey, e.target.value);
+                } catch {
+                  /* stockage indisponible : les plans restent affichés, sans être gardés */
+                }
+              }}
+              rows={4}
+              placeholder={'Plan 1 | 4 s | femme qui pleure dans la cuisine\nPlan 2 | 3 s | billets de banque sur une table'}
+              className="w-full rounded-xl bg-black/40 border border-white/10 p-2.5 text-xs text-gray-200 leading-relaxed focus:outline-none focus:border-[#00FFC6]/50"
+            />
+            <span className="block text-[10px] text-gray-500 mt-1">
+              Un plan par ligne, dans l’ordre. La durée est facultative ; les durées sont ajustées pour coller à la voix off.
+            </span>
+            {board.errors.length > 0 && <span className="block text-[11px] text-red-400 mt-1">{board.errors[0]}</span>}
           </label>
 
           <div className="space-y-2">

@@ -7,13 +7,14 @@ import { ProgressReporter, WorkerApi, probe, requireEnv, run } from './lib.ts';
 import { buildQueries, collectClips, downloadTo } from './stock.ts';
 import type { ClipCandidate } from './stock.ts';
 import { findSceneClips, userSceneClips } from './sceneClips.ts';
-import { mergeDropped, sceneWindows, splitScenes } from './scenes.ts';
+import { mergeDropped, sceneWindows, shotWindows, splitScenes } from './scenes.ts';
 import type { SceneClip, SceneWindow } from './scenes.ts';
 import { FPS, alignedWords } from '../src/video-engine/timeline.ts';
 import { renderViral } from './renderer.ts';
 import { synthesizeVoice } from './tts.ts';
 import { resolveVoice, voiceLabel } from '../src/video-engine/voices.ts';
 import { aspectSize, clipCountFor, resolveRenderSettings } from '../src/video-engine/montage.ts';
+import { planShotSeconds, type Shot } from '../src/video-engine/storyboard.ts';
 
 const RELEASE_TAG = 'renders';
 const KEEP_ASSETS = 300;
@@ -158,9 +159,12 @@ async function main(): Promise<void> {
 
   lap('voix off');
 
-  // 2. Plans. Priorité au script : une recherche par phrase, pour que l'image suive ce qui est dit.
+  // 2. Plans. Storyboard fourni : ce sont les plans de l'utilisateur, dans son ordre.
+  // Sinon, priorité au script : une recherche par phrase, pour que l'image suive ce qui est dit.
   const pixabayKey = requireEnv('PEXELS_API_KEY'); // nom du secret conservé pendant la transition
-  const lines = splitScenes(script);
+  const shots: Shot[] | null = params.storyboard?.length ? params.storyboard : null;
+  const lines = shots ? shots.map((s) => s.text) : splitScenes(script);
+  const shotSeconds = shots ? planShotSeconds(shots, totalSec) : null;
   const plan = await api
     .briefs(lines, params.niche.id, params.media ?? [], script)
     .catch((err: unknown) => {
@@ -173,7 +177,7 @@ async function main(): Promise<void> {
   let clips: SceneClip[];
   let scenes: SceneWindow[] | undefined;
   if (queries && (queries.some((q) => q !== null) || mediaIds.some((m) => m !== null))) {
-    await reporter.report(`Choix des plans pour ${lines.length} phrases…`, 15, true);
+    await reporter.report(`Choix des plans pour ${lines.length} ${shots ? 'plans' : 'phrases'}…`, 15, true);
     // Photos et vidéos personnelles là où elles montrent exactement la phrase ; Pixabay pour les autres.
     const own = await userSceneClips(api, mediaIds, params.media ?? [], publicDir);
     const found = await findSceneClips({
@@ -181,17 +185,31 @@ async function main(): Promise<void> {
       key: pixabayKey,
       seed: params.variant ?? 0,
       fallbackQueries: buildQueries(params.niche.id, params.keywords || []),
+      minSeconds: shotSeconds ?? undefined,
     });
     lap('recherche des plans');
     const got = await downloadClips(found, publicDir, reporter);
     const perScene = lines.map((_, i) => own[i] ?? got[i]);
     const precise = perScene.filter((c) => c !== null).length;
-    console.log(`[plans] ${precise}/${lines.length} phrases avec un plan qui correspond aux mots-clés`);
-    await reporter.report(`${precise}/${lines.length} phrases illustrées par un plan précis`, 20, true);
-    clips = perScene.filter((c): c is SceneClip => c !== null);
+    console.log(`[plans] ${precise}/${lines.length} ${shots ? 'plans du storyboard' : 'phrases'} avec un plan qui correspond`);
+    await reporter.report(`${precise}/${lines.length} ${shots ? 'plans' : 'phrases'} illustrés par un plan précis`, 20, true);
+    if (shots && shotSeconds) {
+      // Durées réelles des clips : un plan trop court se termine plus tôt, le temps passe au suivant.
+      const sb = shotWindows(
+        shotSeconds,
+        perScene.map((c) => (c ? (c.kind === 'image' ? Number.POSITIVE_INFINITY : c.durationSec) : null)),
+        Math.ceil(totalSec * FPS),
+        FPS,
+      );
+      clips = sb.kept.map((i) => perScene[i]).filter((c): c is SceneClip => c !== null);
+      scenes = sb.windows;
+      voiceNote = voiceNote ? `${voiceNote} · storyboard` : 'storyboard';
+    } else {
+      clips = perScene.filter((c): c is SceneClip => c !== null);
+      const timing = alignedWords(voice.events, script, voice.audioSec);
+      scenes = mergeDropped(sceneWindows(lines, timing, Math.ceil(totalSec * FPS)), perScene.map((c) => c !== null)).windows;
+    }
     if (clips.length < MIN_CLIPS) throw new Error(`Moins de ${MIN_CLIPS} plans exploitables après téléchargement.`);
-    const timing = alignedWords(voice.events, script, voice.audioSec);
-    scenes = mergeDropped(sceneWindows(lines, timing, Math.ceil(totalSec * FPS)), perScene.map((c) => c !== null)).windows;
   } else {
     // Repli : recherche générique par niche, nombre de plans selon la durée.
     const need = clipCountFor(totalSec, settings.clipsPerScript);
