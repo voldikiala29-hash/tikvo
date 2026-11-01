@@ -2,10 +2,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { bundle } from '@remotion/bundler';
 import { ensureBrowser, renderMedia, selectComposition } from '@remotion/renderer';
-import type { ViralTemplateProps } from '../src/video-engine/types.ts';
+/** Composition Remotion à rendre : « Viral » (plans Pixabay) ou « Cartoon » (dessin animé). */
+export type CompositionId = 'Viral' | 'Cartoon';
 
 export async function renderViral(options: {
-  props: ViralTemplateProps;
+  props: object;
+  composition?: CompositionId;
   publicDir: string;
   outFile: string;
   onBundleProgress?: (percent: number) => void;
@@ -26,7 +28,8 @@ export async function renderViral(options: {
   console.log(`[temps] bundle Remotion : ${((Date.now() - started) / 1000).toFixed(1)} s`);
 
   const inputProps = options.props as unknown as Record<string, unknown>;
-  const composition = await selectComposition({ serveUrl, id: 'Viral', inputProps });
+  const compositionId = options.composition ?? 'Viral';
+  const composition = await selectComposition({ serveUrl, id: compositionId, inputProps });
 
   started = Date.now();
   await renderMedia({

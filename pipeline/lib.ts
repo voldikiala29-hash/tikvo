@@ -121,6 +121,10 @@ export interface JobData {
     pexelsIds?: number[];
     /** Variante de recréation : 0 = rendu d'origine. */
     variant?: number;
+    /** Style de montage : plans Pixabay (défaut) ou dessin animé. */
+    style?: 'stock' | 'cartoon';
+    /** Personnage principal du dessin animé (identifiant du catalogue). */
+    mainCharacter?: string;
     /** Storyboard : plans voulus, dans l'ordre, avec une durée facultative (secondes). */
     storyboard?: { text: string; seconds: number | null }[];
     /** Photos et vidéos personnelles décrites (choisies par phrase). */
