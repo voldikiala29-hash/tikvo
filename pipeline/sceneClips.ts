@@ -6,6 +6,9 @@ import { pickSceneHit } from './scenes.ts';
 import type { SceneClip } from './scenes.ts';
 import { probe, type WorkerApi } from './lib.ts';
 
+/** En dessous de ce nombre de plans précis, on complète avec des clips de la niche. */
+export const MIN_MATCHED_SCENES = 2;
+
 export async function findSceneClips(options: {
   queries: (string | null)[];
   key: string;
@@ -34,8 +37,11 @@ export async function findSceneClips(options: {
     return toCandidate(hit);
   });
 
+  // Strict : une phrase sans plan précis reste sans image (sa durée revient à la phrase précédente).
+  // Repli générique par niche seulement si presque rien n'a été trouvé.
+  const matched = picks.filter(Boolean).length;
   const missing = picks.flatMap((p, i) => (p ? [] : [i]));
-  if (missing.length > 0) {
+  if (missing.length > 0 && matched < MIN_MATCHED_SCENES) {
     const extra = await collectClips({
       need: missing.length,
       ids: [],

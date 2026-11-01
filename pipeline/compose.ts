@@ -1,5 +1,5 @@
 import type { MontageConfig, ViralTemplateProps } from '../src/video-engine/types.ts';
-import { FPS, hookFramesFor, wordsFromBoundaries } from '../src/video-engine/timeline.ts';
+import { FPS, alignedWords, hookFramesFor } from '../src/video-engine/timeline.ts';
 import type { BoundaryEvent } from '../src/video-engine/timeline.ts';
 import {
   aspectSize,
@@ -57,7 +57,7 @@ export function composeProps(input: ComposeInput): ViralTemplateProps {
   if (totalSec > MAX_VIDEO_SECONDS) {
     throw new Error(`La vidéo durerait ${Math.round(totalSec)} s : raccourcis le script (maximum ${MAX_VIDEO_SECONDS} s).`);
   }
-  const words = wordsFromBoundaries(input.events, input.script, input.audioSec);
+  const words = alignedWords(input.events, input.script, input.audioSec);
   const branding = input.branding ?? DEFAULT_BRANDING;
   const settings = input.settings ?? DEFAULT_RENDER_SETTINGS;
   const size = aspectSize(settings.aspect);

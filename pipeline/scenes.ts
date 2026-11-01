@@ -102,8 +102,11 @@ export function pickSceneHit<T extends { id: number; tags?: string }>(hits: T[],
     .toLowerCase()
     .split(/\s+/)
     .filter((w) => w.length > 2 && !STOP.has(w));
+  // Strict : la moitié au moins des mots utiles doit figurer dans les tags (au moins un).
+  // En dessous, aucun clip : mieux vaut pas de plan qu'un plan hors sujet.
+  const required = Math.max(1, Math.ceil(wanted.length / 2));
   let best: T | null = null;
-  let bestScore = -1;
+  let bestScore = required - 1;
   for (const hit of hits) {
     if (used.has(hit.id)) continue;
     const tags = (hit.tags ?? '').toLowerCase();

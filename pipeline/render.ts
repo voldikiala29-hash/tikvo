@@ -9,7 +9,7 @@ import type { ClipCandidate } from './stock.ts';
 import { findSceneClips, userSceneClips } from './sceneClips.ts';
 import { mergeDropped, sceneWindows, splitScenes } from './scenes.ts';
 import type { SceneClip, SceneWindow } from './scenes.ts';
-import { FPS, wordsFromBoundaries } from '../src/video-engine/timeline.ts';
+import { FPS, alignedWords } from '../src/video-engine/timeline.ts';
 import { renderViral } from './renderer.ts';
 import { synthesizeVoice } from './tts.ts';
 import { resolveVoice, voiceLabel } from '../src/video-engine/voices.ts';
@@ -177,9 +177,12 @@ async function main(): Promise<void> {
     lap('recherche des plans');
     const got = await downloadClips(found, publicDir, reporter);
     const perScene = lines.map((_, i) => own[i] ?? got[i]);
+    const precise = perScene.filter((c) => c !== null).length;
+    console.log(`[plans] ${precise}/${lines.length} phrases avec un plan qui correspond aux mots-clés`);
+    await reporter.report(`${precise}/${lines.length} phrases illustrées par un plan précis`, 20, true);
     clips = perScene.filter((c): c is SceneClip => c !== null);
     if (clips.length < MIN_CLIPS) throw new Error(`Moins de ${MIN_CLIPS} plans exploitables après téléchargement.`);
-    const timing = wordsFromBoundaries(voice.events, params.script, voice.audioSec);
+    const timing = alignedWords(voice.events, params.script, voice.audioSec);
     scenes = mergeDropped(sceneWindows(lines, timing, Math.ceil(totalSec * FPS)), perScene.map((c) => c !== null)).windows;
   } else {
     // Repli : recherche générique par niche, nombre de plans selon la durée.
