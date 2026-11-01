@@ -14,7 +14,7 @@ export interface BriefPlan {
   mediaIds: (string | null)[];
 }
 
-export function buildBriefPrompt(lines: string[], niche: string, media: BriefMedia[] = []): string {
+export function buildBriefPrompt(lines: string[], niche: string, media: BriefMedia[] = [], script = ''): string {
   const numbered = lines.map((l, i) => `${i + 1}. ${l}`).join('\n');
   const mediaLines =
     media.length === 0
@@ -25,6 +25,7 @@ export function buildBriefPrompt(lines: string[], niche: string, media: BriefMed
         ];
   return [
     `Niche : ${niche}.`,
+    ...(script ? [`Script complet, pour le sens général (qui parle, de quoi, sur quel ton) : « ${script} »`, 'Chaque requête doit coller à la phrase replacée dans ce script, pas à la niche en général.'] : []),
     'Pour chaque phrase d’une vidéo en français, donne :',
     '- "query" : une requête de recherche de vidéo stock EN ANGLAIS qui montre exactement ce que la phrase décrit ;',
     '- "media" : l’id d’une photo ou vidéo personnelle qui convient, ou null.',

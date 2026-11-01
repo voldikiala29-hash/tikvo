@@ -4,7 +4,7 @@ import { createRender, getRender, listDayRenders, parseRenderInput } from './ren
 import { callModel, generateNicheScripts, rewriteScript, AI_MODEL, runWorkersAi, textModels } from './scripts';
 import { ANALYZE_MODEL, TTS_MODEL, dedupe, extractWorkersAiText } from './aiModels';
 import { synthesizeSpeech } from './speech';
-import { generateVideo, parseVideoInput, readGeneratedVideo } from './video';
+import { KEYWORDS_SYSTEM, keywordsPrompt, parseKeywords } from './keywords';
 import { BRIEF_SYSTEM, buildBriefPrompt, parseBriefPlan } from './briefs';
 import { addUserMedia, cleanDescription, deleteUserMedia, listUserMedia, mediaFileForPipeline, mediaForJob, publicMedia, updateUserMedia, userMediaFile } from './media';
 import { fetchPublicMetadata, parseSourceUrl } from './inspiration';
@@ -186,6 +186,7 @@ async function handleInternalBriefs(request: Request, env: Env): Promise<Respons
     .slice(0, 8);
   if (lines.length === 0) throw new HttpError(400, 'invalid_param', 'Aucune phrase à illustrer.');
   const niche = typeof body.niche === 'string' && /^[a-z]{2,20}$/.test(body.niche) ? body.niche : 'general';
+  const script = typeof body.script === 'string' ? body.script.replace(/\s+/g, ' ').trim().slice(0, 1500) : '';
   const media = (Array.isArray(body.media) ? body.media : [])
     .filter((m): m is { id: string; description: string } => !!m && typeof (m as { id?: unknown }).id === 'string')
     .map((m) => ({ id: m.id, description: cleanDescription(m.description) }))
@@ -193,7 +194,7 @@ async function handleInternalBriefs(request: Request, env: Env): Promise<Respons
     .slice(0, 40);
   let plan: { queries: (string | null)[]; mediaIds: (string | null)[] };
   try {
-    const raw = await callModel(env, buildBriefPrompt(lines, niche, media), 300 + lines.length * 60, BRIEF_SYSTEM);
+    const raw = await callModel(env, buildBriefPrompt(lines, niche, media, script), 300 + lines.length * 60, BRIEF_SYSTEM);
     plan = parseBriefPlan(raw, lines.length, media.map((m) => m.id));
   } catch (err) {
     console.warn('Plans par phrase indisponibles :', err instanceof Error ? err.message : err);
@@ -290,6 +291,37 @@ async function handleStockSearch(request: Request, env: Env): Promise<Response> 
   const perPage = Math.min(10, Math.max(3, Number(url.searchParams.get('per_page')) || 3));
   const videos = await searchStockVideos(env, q, perPage);
   return respond(request, env, { videos });
+}
+
+/**
+ * Recherche stock à partir d'un script : { script, q?, per_page? }.
+ * Le modèle extrait 3 mots-clés visuels en anglais ; chacun cherche 3 vidéos sur Pixabay.
+ * Sans script : recherche simple sur q. Si le modèle ne répond pas : fallback=true, le client garde sa logique par niche.
+ */
+async function handleStockSearchFromScript(request: Request, env: Env): Promise<Response> {
+  await requireFirebaseUser(request, env);
+  const body = await readJson(request);
+  const q = typeof body.q === 'string' ? body.q.trim().slice(0, 100) : '';
+  const script = typeof body.script === 'string' ? body.script.replace(/\s+/g, ' ').trim().slice(0, 1500) : '';
+  const perPage = Math.min(10, Math.max(3, Number(body.per_page) || 3));
+  if (script.length < 10) {
+    if (!q) throw new HttpError(400, 'invalid_param', 'Indique un script ou une recherche (q).');
+    return respond(request, env, { videos: await searchStockVideos(env, q, perPage) });
+  }
+  let keywords: string[] = [];
+  try {
+    keywords = parseKeywords(await callModel(env, keywordsPrompt(script), 200, KEYWORDS_SYSTEM));
+  } catch (err) {
+    console.warn('Mots-clés indisponibles :', err instanceof Error ? err.message : err);
+  }
+  if (keywords.length === 0) return respond(request, env, { keywords: [], results: [], fallback: true });
+  const results = await Promise.all(
+    keywords.map(async (keyword) => ({
+      keyword,
+      videos: await searchStockVideos(env, keyword, perPage).catch(() => []),
+    })),
+  );
+  return respond(request, env, { keywords, results, fallback: false });
 }
 
 async function handleGenerateScripts(request: Request, env: Env): Promise<Response> {
@@ -435,21 +467,6 @@ async function handleTtsFree(request: Request, env: Env): Promise<Response> {
   return new Response(audio, { headers: { 'Content-Type': 'audio/mpeg', 'X-Voice-Engine': 'melotts' } });
 }
 
-/** Vidéo IA optionnelle (payante, désactivée par défaut) : prompt, format, durée. */
-async function handleGenerateVideoFree(request: Request, env: Env): Promise<Response> {
-  const user = await requireFirebaseUser(request, env);
-  const input = parseVideoInput(await readJson(request));
-  const result = await generateVideo(env, user.uid, input);
-  return respond(request, env, result);
-}
-
-/** Vidéo générée par l'utilisateur connecté. */
-async function handleGeneratedFile(request: Request, env: Env, id: string): Promise<Response> {
-  const user = await requireFirebaseUser(request, env);
-  const object = await readGeneratedVideo(env, user.uid, id);
-  return new Response(object.body, { headers: { 'Content-Type': 'video/mp4', 'Cache-Control': 'private, max-age=3600' } });
-}
-
 async function handleAnalyzeInspiration(request: Request, env: Env): Promise<Response> {
   const user = await requireFirebaseUser(request, env);
   const rows = await env.DB.prepare('SELECT platform, title, author, notes FROM inspiration_sources WHERE uid = ? LIMIT 20')
@@ -585,6 +602,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (method === 'GET' && (path === '/' || path === '/health')) return handleHealth(request, env);
 
   if (method === 'GET' && path === '/api/pexels/search') return handleStockSearch(request, env);
+  if (method === 'POST' && path === '/api/pexels/search') return handleStockSearchFromScript(request, env);
   if (method === 'POST' && path === '/api/render') return handleRenderCreate(request, env);
   if (method === 'POST' && path === '/api/generate-scripts') return handleGenerateScripts(request, env);
   if (method === 'POST' && path === '/api/rewrite-script') return handleRewriteScript(request, env);
@@ -594,9 +612,6 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === '/api/analyze-style' && method === 'POST') return handleAnalyzeInspiration(request, env);
   if (path === '/api/test-ai' && method === 'GET') return handleTestAi(request, env);
   if (path === '/api/tts-free' && method === 'POST') return handleTtsFree(request, env);
-  if (path === '/api/generate-video-free' && method === 'POST') return handleGenerateVideoFree(request, env);
-  const generatedMatch = path.match(/^\/api\/generated\/([0-9a-f-]{36})$/);
-  if (generatedMatch && method === 'GET') return handleGeneratedFile(request, env, generatedMatch[1]);
   const inspirationId = path.match(/^\/api\/inspiration\/([0-9a-f-]{36})$/);
   if (inspirationId && method === 'PUT') return handleUpdateInspiration(request, env, inspirationId[1]);
   if (inspirationId && method === 'DELETE') return handleDeleteInspiration(request, env, inspirationId[1]);

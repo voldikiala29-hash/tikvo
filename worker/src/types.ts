@@ -29,9 +29,6 @@ export interface Env {
   AI_TEXT_MODELS?: string;
   // Stockage des photos et vidéos de l'utilisateur (facultatif tant que R2 n'est pas activé).
   MEDIA_BUCKET?: R2Bucket;
-  VIDEO_GENERATION_ENABLED?: string;
-  VIDEO_MODELS?: string;
-  VIDEO_DAILY_LIMIT?: string;
   // Fournisseurs gratuits (facultatifs) : sans clé, ils sont ignorés.
   GROQ_API_KEY?: string;
   GROQ_MODEL?: string;
