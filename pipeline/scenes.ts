@@ -97,7 +97,12 @@ export function mergeDropped(windows: SceneWindow[], keep: boolean[]): { windows
 }
 
 /** Meilleur résultat pour une phrase : le plus de mots de la requête figurent dans ses tags, sans clip déjà pris. */
-export function pickSceneHit<T extends { id: number; tags?: string }>(hits: T[], query: string, used: Set<number>): T | null {
+export function pickSceneHit<T extends { id: number; tags?: string; duration?: number }>(
+  hits: T[],
+  query: string,
+  used: Set<number>,
+  minSeconds = 0,
+): T | null {
   const wanted = query
     .toLowerCase()
     .split(/\s+/)
@@ -105,16 +110,62 @@ export function pickSceneHit<T extends { id: number; tags?: string }>(hits: T[],
   // Strict : la moitié au moins des mots utiles doit figurer dans les tags (au moins un).
   // En dessous, aucun clip : mieux vaut pas de plan qu'un plan hors sujet.
   const required = Math.max(1, Math.ceil(wanted.length / 2));
+  // À pertinence égale, un plan assez long pour la durée demandée passe avant un plan trop court.
   let best: T | null = null;
-  let bestScore = required - 1;
+  let bestScore = -1;
+  let bestLong = false;
   for (const hit of hits) {
     if (used.has(hit.id)) continue;
     const tags = (hit.tags ?? '').toLowerCase();
     const score = wanted.filter((w) => tags.includes(w)).length;
-    if (score > bestScore) {
+    if (score < required) continue;
+    const long = (hit.duration ?? 0) >= minSeconds;
+    if (!best || (long && !bestLong) || (long === bestLong && score > bestScore)) {
       best = hit;
       bestScore = score;
+      bestLong = long;
     }
   }
   return best;
+}
+
+/**
+ * Fenêtres des plans d'un storyboard. `seconds` = durée voulue de chaque plan (somme = durée totale).
+ * `clipSec[i]` = durée réelle du clip du plan i (null = pas de plan, Infinity = image fixe).
+ * Un clip plus court que prévu se termine plus tôt : le temps restant passe au plan suivant.
+ * Un plan sans clip cède son temps au suivant. Le reliquat final reste sur le dernier plan.
+ */
+export function shotWindows(
+  seconds: number[],
+  clipSec: (number | null)[],
+  totalFrames: number,
+  fps: number,
+): { windows: SceneWindow[]; kept: number[] } {
+  const kept: number[] = [];
+  const spans: number[] = [];
+  let carry = 0;
+  seconds.forEach((sec, i) => {
+    const need = Math.round(sec * fps) + carry;
+    const clip = clipSec[i];
+    if (clip === null) {
+      carry = need;
+      return;
+    }
+    const have = Number.isFinite(clip) ? Math.max(1, Math.floor(clip * fps)) : Infinity;
+    const used = Math.max(1, Math.min(need, have));
+    kept.push(i);
+    spans.push(used);
+    carry = need - used;
+  });
+  if (spans.length === 0) return { windows: [], kept };
+  // Le total doit tomber juste sur la voix : l'écart d'arrondi et le reliquat vont au dernier plan.
+  const others = spans.slice(0, -1).reduce((a, b) => a + b, 0);
+  spans[spans.length - 1] = Math.max(1, totalFrames - others);
+  let from = 0;
+  const windows = spans.map((durationInFrames) => {
+    const w = { from, durationInFrames };
+    from += durationInFrames;
+    return w;
+  });
+  return { windows, kept };
 }

@@ -14,6 +14,8 @@ export async function findSceneClips(options: {
   key: string;
   seed: number;
   fallbackQueries: string[];
+  /** Durée minimale souhaitée par requête (storyboard) : un plan assez long est préféré. */
+  minSeconds?: (number | undefined)[];
 }): Promise<(ClipCandidate | null)[]> {
   const page = 1 + (Math.abs(Math.floor(options.seed)) % 3);
   const hits = await Promise.all(
@@ -31,7 +33,7 @@ export async function findSceneClips(options: {
   const used = new Set<number>();
   const picks: (ClipCandidate | null)[] = options.queries.map((query, i) => {
     if (!query) return null;
-    const hit = pickSceneHit(hits[i], query, used);
+    const hit = pickSceneHit(hits[i], query, used, options.minSeconds?.[i] ?? 0);
     if (!hit) return null;
     used.add(hit.id);
     return toCandidate(hit);

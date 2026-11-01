@@ -121,6 +121,8 @@ export interface JobData {
     pexelsIds?: number[];
     /** Variante de recréation : 0 = rendu d'origine. */
     variant?: number;
+    /** Storyboard : plans voulus, dans l'ordre, avec une durée facultative (secondes). */
+    storyboard?: { text: string; seconds: number | null }[];
     /** Photos et vidéos personnelles décrites (choisies par phrase). */
     media?: { id: string; kind: 'image' | 'video'; ext: string; description: string }[];
     duration?: number;
