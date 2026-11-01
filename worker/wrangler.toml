@@ -23,11 +23,6 @@ FRONTEND_URL_2 = "https://voldikiala29-hash.github.io/tikvo"
 ALLOWED_ORIGINS = "https://tikvo.store,https://www.tikvo.store,https://voldikiala29-hash.github.io"
 # Modèles de texte Workers AI, du meilleur au secours (plan gratuit uniquement).
 AI_TEXT_MODELS = "@cf/zai-org/glm-4.7-flash,@cf/google/gemma-4-26b-a4b-it,@cf/openai/gpt-oss-120b"
-# Génération vidéo IA : payante (environ 0,075 $ par clip de 4 s en 480p avec minimax/h3-lite). Désactivée par défaut.
-VIDEO_GENERATION_ENABLED = "false"
-VIDEO_MODELS = "minimax/h3-lite"
-# Nombre maximal de vidéos générées par utilisateur et par jour.
-VIDEO_DAILY_LIMIT = "5"
 
 [observability]
 enabled = true
@@ -35,7 +30,7 @@ enabled = true
 [ai]
 binding = "AI"
 
-# Photos, vidéos personnelles, voix et vidéos générées : bucket R2 « tikvo-media ».
+# Photos, vidéos personnelles et voix (copies) : bucket R2 « tikvo-media ».
 [[r2_buckets]]
 binding = "MEDIA_BUCKET"
 bucket_name = "tikvo-media"

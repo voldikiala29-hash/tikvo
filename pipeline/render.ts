@@ -154,7 +154,7 @@ async function main(): Promise<void> {
   const pixabayKey = requireEnv('PEXELS_API_KEY'); // nom du secret conservé pendant la transition
   const lines = splitScenes(params.script);
   const plan = await api
-    .briefs(lines, params.niche.id, params.media ?? [])
+    .briefs(lines, params.niche.id, params.media ?? [], params.script)
     .catch((err: unknown) => {
       console.warn('Plans par phrase indisponibles, recherche par niche :', err instanceof Error ? err.message : err);
       return null;

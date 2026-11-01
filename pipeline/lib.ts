@@ -171,8 +171,9 @@ export class WorkerApi {
     lines: string[],
     niche: string,
     media: { id: string; description: string }[],
+    script = '',
   ): Promise<{ queries: (string | null)[]; mediaIds: (string | null)[] }> {
-    return this.request<{ queries: (string | null)[]; mediaIds: (string | null)[] }>('POST', '/internal/briefs', { lines, niche, media });
+    return this.request<{ queries: (string | null)[]; mediaIds: (string | null)[] }>('POST', '/internal/briefs', { lines, niche, media, script });
   }
 
   /** Voix off gratuite (MeloTTS, via le Worker) : écrit le MP3 dans dest. Une seule tentative, pour ne pas consommer deux fois. */
