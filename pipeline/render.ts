@@ -1,5 +1,5 @@
 // Rendu réel d'une vidéo tikvo, exécuté par GitHub Actions (workflow render-video.yml).
-// Voix off Edge TTS → clips Pixabay (en parallèle) → montage Remotion aux dimensions choisies → release GitHub.
+// Voix off MeloTTS (Workers AI, repli gTTS) → clips Pixabay (en parallèle) → montage Remotion aux dimensions choisies → release GitHub.
 import { mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { composeProps, MAX_VIDEO_SECONDS, TAIL_SECONDS, resolveBranding } from './compose.ts';
@@ -119,8 +119,9 @@ async function main(): Promise<void> {
   const lap = (label: string) => console.log(`[temps] ${label} : ${((Date.now() - t0) / 1000).toFixed(1)} s depuis le début`);
 
   // 1. Voix off : c'est elle qui fixe la durée de la vidéo.
-  await reporter.report('Synthèse de la voix off (Edge TTS)…', 5, true);
-  // Voix et style propres à la niche, sauf choix explicite pour ce rendu.
+  await reporter.report('Synthèse de la voix off (MeloTTS, gratuit)…', 5, true);
+  // Voix et style propres à la niche, sauf choix explicite pour ce rendu. MeloTTS n'a qu'une voix par langue :
+  // seuls les réglages ne s'appliquent qu'au moteur de secours (gTTS ne règle ni voix ni vitesse).
   const chosen = resolveVoice(params.niche.id, settings.voice, settings.voiceStyle);
   const voice = await synthesizeVoice({
     text: params.script,
@@ -129,12 +130,16 @@ async function main(): Promise<void> {
     pitch: chosen.pitch,
     workDir,
     audioFile: path.join(publicDir, 'audio', 'voice.mp3'),
+    api,
+    jobId,
   });
   console.log(`Voix : ${chosen.voice} (${chosen.style}), ${voice.audioSec.toFixed(1)} s, moteur ${voice.engine}, événements ${voice.kind} (${voice.events.length})`);
-  // Le moteur de secours (gTTS) ne sait pas parler avec la voix choisie : on le dit dans la carte.
-  voiceNote = voice.engine === 'edge' ? `voix ${voiceLabel(chosen.voice)}` : `voix de secours gTTS (« ${voiceLabel(chosen.voice)} » indisponible)`;
-  if (voice.engine !== 'edge') {
-    await reporter.report(`Voix de secours gTTS : « ${voiceLabel(chosen.voice)} » indisponible sur Edge pour le moment`, 12, true);
+  // Dans la carte : quelle voix a réellement parlé.
+  voiceNote = voice.engine === 'melotts'
+    ? 'voix MeloTTS (Workers AI, une voix française)'
+    : `voix de secours gTTS (MeloTTS indisponible, « ${voiceLabel(chosen.voice)} » non appliqué)`;
+  if (voice.engine !== 'melotts') {
+    await reporter.report('Voix de secours gTTS : MeloTTS indisponible pour le moment', 12, true);
   }
   if (voice.audioSec + TAIL_SECONDS > MAX_VIDEO_SECONDS) {
     throw new Error(`La voix dure ${Math.round(voice.audioSec)} s : raccourcis le script (maximum ${MAX_VIDEO_SECONDS - 1} s).`);

@@ -1,7 +1,9 @@
 import { dispatchWorkflow } from './github';
 import { requireFirebaseUser, searchStockVideos } from './pexels';
 import { createRender, getRender, listDayRenders, parseRenderInput } from './renders';
-import { callModel, generateNicheScripts, rewriteScript, AI_MODEL } from './scripts';
+import { callModel, generateNicheScripts, rewriteScript, AI_MODEL, runWorkersAi, textModels } from './scripts';
+import { ANALYZE_MODEL, TTS_MODEL, dedupe, extractWorkersAiText } from './aiModels';
+import { synthesizeSpeech } from './speech';
 import { BRIEF_SYSTEM, buildBriefPrompt, parseBriefPlan } from './briefs';
 import { addUserMedia, cleanDescription, deleteUserMedia, listUserMedia, mediaFileForPipeline, mediaForJob, publicMedia, updateUserMedia, userMediaFile } from './media';
 import { fetchPublicMetadata, parseSourceUrl } from './inspiration';
@@ -386,6 +388,52 @@ async function handleDeleteInspiration(request: Request, env: Env, id: string): 
 }
 
 /** Llama résume le style commun des sources (titres, auteurs, textes collés) en quelques lignes. */
+/**
+ * Diagnostic des modèles gratuits : texte (chaque modèle de AI_TEXT_MODELS) et voix (MeloTTS).
+ * Réservé aux comptes connectés pour éviter une consommation de quota par des tiers.
+ */
+async function handleTestAi(request: Request, env: Env): Promise<Response> {
+  await requireFirebaseUser(request, env);
+  const results: Record<string, unknown>[] = [];
+  for (const model of textModels(env)) {
+    const started = Date.now();
+    try {
+      const out = await runWorkersAi(env, model, { messages: [{ role: 'user', content: 'Réponds seulement : OK' }], max_tokens: 20 });
+      const sample = extractWorkersAiText(out).slice(0, 80);
+      const row = { kind: 'texte', model, ok: sample.trim().length > 0, ms: Date.now() - started, sample };
+      console.log('[test-ai]', row);
+      results.push(row);
+    } catch (err) {
+      const row = { kind: 'texte', model, ok: false, ms: Date.now() - started, error: err instanceof Error ? err.message : String(err) };
+      console.warn('[test-ai]', row);
+      results.push(row);
+    }
+  }
+  const started = Date.now();
+  try {
+    const audio = await synthesizeSpeech(env, 'Bonjour, ceci est un test de voix.', 'fr', null);
+    const row = { kind: 'voix', model: TTS_MODEL, ok: true, ms: Date.now() - started, bytes: audio.byteLength };
+    console.log('[test-ai]', row);
+    results.push(row);
+  } catch (err) {
+    const row = { kind: 'voix', model: TTS_MODEL, ok: false, ms: Date.now() - started, error: err instanceof Error ? err.message : String(err) };
+    console.warn('[test-ai]', row);
+    results.push(row);
+  }
+  return respond(request, env, { results });
+}
+
+/** Voix off pour le rendu (appel interne, secret de rendu). Renvoie le MP3 directement. */
+async function handleTtsFree(request: Request, env: Env): Promise<Response> {
+  await requireInternal(request, env);
+  const body = await readJson(request);
+  const text = typeof body.text === 'string' ? body.text : '';
+  const lang = typeof body.lang === 'string' && /^[a-z]{2}$/.test(body.lang) ? body.lang : 'fr';
+  const jobId = typeof body.jobId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(body.jobId) ? body.jobId : null;
+  const audio = await synthesizeSpeech(env, text, lang, jobId);
+  return new Response(audio, { headers: { 'Content-Type': 'audio/mpeg', 'X-Voice-Engine': 'melotts' } });
+}
+
 async function handleAnalyzeInspiration(request: Request, env: Env): Promise<Response> {
   const user = await requireFirebaseUser(request, env);
   const rows = await env.DB.prepare('SELECT platform, title, author, notes FROM inspiration_sources WHERE uid = ? LIMIT 20')
@@ -407,7 +455,8 @@ async function handleAnalyzeInspiration(request: Request, env: Env): Promise<Res
     'Décris en 5 lignes maximum le style commun : type d’accroche, longueur des phrases, ton, structure du script, sujets récurrents.',
     'Réponds uniquement avec ces lignes, en français.',
   ].join('\n');
-  const raw = await callModel(env, prompt, 500, 'Tu es un analyste de contenus vidéo. Tu réponds de façon concise.');
+  // Modèle rapide d'abord, puis les modèles de texte en secours.
+  const raw = await callModel(env, prompt, 500, 'Tu es un analyste de contenus vidéo. Tu réponds de façon concise.', dedupe([ANALYZE_MODEL, ...textModels(env)]));
   const brief = cleanScriptText(raw).slice(0, 800);
   if (brief.length < 20) throw new HttpError(502, 'analysis_failed', 'L’analyse n’a rien donné. Réessaie.');
 
@@ -526,6 +575,9 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === '/api/inspiration' && method === 'GET') return handleListInspiration(request, env);
   if (path === '/api/inspiration' && method === 'POST') return handleAddInspiration(request, env);
   if (path === '/api/inspiration/analyze' && method === 'POST') return handleAnalyzeInspiration(request, env);
+  if (path === '/api/analyze-style' && method === 'POST') return handleAnalyzeInspiration(request, env);
+  if (path === '/api/test-ai' && method === 'GET') return handleTestAi(request, env);
+  if (path === '/api/tts-free' && method === 'POST') return handleTtsFree(request, env);
   const inspirationId = path.match(/^\/api\/inspiration\/([0-9a-f-]{36})$/);
   if (inspirationId && method === 'PUT') return handleUpdateInspiration(request, env, inspirationId[1]);
   if (inspirationId && method === 'DELETE') return handleDeleteInspiration(request, env, inspirationId[1]);

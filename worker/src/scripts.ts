@@ -1,14 +1,34 @@
 import { HttpError, Env } from './types';
 import { ScriptItem, cleanScriptText, parseScriptsJson } from './scriptParse';
 import { callProvider, providerChain } from './llm';
+import { DEFAULT_TEXT_MODELS, dedupe, extractWorkersAiText, parseModelList } from './aiModels';
 
 // Débit de parole moyen (mots par seconde), aligné sur src/video-engine/montage.ts.
 const WORDS_PER_SECOND = 2.8;
 
-// Meta Llama hébergé par Cloudflare Workers AI : pas de clé externe, facturé sur le compte Cloudflare.
-export const AI_MODEL = '@cf/meta/llama-3.1-8b-instruct';
+// Premier modèle de la liste par défaut (seulement informatif dans les réponses API).
+export const AI_MODEL = DEFAULT_TEXT_MODELS[0];
 const BATCH_SIZE = 10;
 const CALL_TIMEOUT_MS = 30_000;
+
+/** Modèles Workers AI de texte, dans l'ordre d'essai. Surchargeable par la variable AI_TEXT_MODELS. */
+export function textModels(env: Env): string[] {
+  return parseModelList(env.AI_TEXT_MODELS, DEFAULT_TEXT_MODELS);
+}
+
+/** Lance un modèle Workers AI avec délai maximal. Lève HttpError 504 si le délai est dépassé. */
+export async function runWorkersAi(env: Env, model: string, input: Record<string, unknown>, timeoutMs = CALL_TIMEOUT_MS): Promise<unknown> {
+  if (!env.AI) throw new HttpError(503, 'ai_unavailable', 'Aucun modèle IA disponible.');
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new HttpError(504, 'ai_timeout', 'Le modèle met trop de temps à répondre. Réessaie dans un instant.')), timeoutMs);
+  });
+  try {
+    return await Promise.race([env.AI.run(model, input), timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 const SYSTEM =
   'Tu es un scénariste expert des vidéos TikTok virales. Tu réponds uniquement avec un tableau JSON valide, sans texte autour.';
@@ -30,7 +50,11 @@ export function buildPrompt(niche: string, count: number, avoid: string[], brief
   return lines.join('\n');
 }
 
-export async function callModel(env: Env, prompt: string, maxTokens = 2500, system = SYSTEM): Promise<string> {
+/**
+ * Texte généré. Ordre : fournisseurs externes gratuits si une clé est configurée, puis les modèles
+ * Workers AI (`models`, sinon la liste AI_TEXT_MODELS) un par un. Un modèle en erreur passe au suivant.
+ */
+export async function callModel(env: Env, prompt: string, maxTokens = 2500, system = SYSTEM, models?: string[]): Promise<string> {
   const messages = [
     { role: 'system' as const, content: system },
     { role: 'user' as const, content: prompt },
@@ -45,33 +69,30 @@ export async function callModel(env: Env, prompt: string, maxTokens = 2500, syst
       console.warn(`[ai] ${provider.name} indisponible, essai suivant :`, err instanceof Error ? err.message : err);
     }
   }
-  // 2. Workers AI, dernier recours.
+  // 2. Workers AI, modèle après modèle.
   if (!env.AI) throw new HttpError(503, 'ai_unavailable', 'Aucun modèle IA disponible.');
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new HttpError(504, 'ai_timeout', 'Le modèle met trop de temps à répondre. Réessaie dans un instant.')), CALL_TIMEOUT_MS);
-  });
-  try {
-    const out = (await Promise.race([
-      env.AI.run(AI_MODEL, {
+  for (const model of dedupe(models ?? textModels(env))) {
+    try {
+      const out = await runWorkersAi(env, model, {
         messages: [
           { role: 'system', content: system },
           { role: 'user', content: prompt },
         ],
         max_tokens: maxTokens,
-      }),
-      timeout,
-    ])) as { response?: string } | string;
-    return typeof out === 'string' ? out : (out?.response ?? '');
-  } catch (err) {
-    if (err instanceof HttpError) throw err;
-    // Erreur Workers AI (quota quotidien, modèle indisponible…) : message lisible, cause dans les logs.
-    const message = err instanceof Error ? err.message : String(err);
-    console.error('[ai] appel Workers AI échoué', { model: AI_MODEL, message });
-    throw new HttpError(503, 'ai_error', 'Le modèle IA est indisponible (quota du jour atteint ou erreur temporaire). Réessaie plus tard.');
-  } finally {
-    if (timer) clearTimeout(timer);
+      });
+      const text = extractWorkersAiText(out);
+      if (text.trim()) {
+        console.log(`[ai] réponse de ${model}`);
+        return text;
+      }
+      console.warn('[ai] réponse vide, modèle suivant', { model });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn('[ai] modèle Workers AI en échec, essai suivant', { model, message });
+    }
   }
+  // Tous les modèles ont échoué : message lisible, causes dans les logs ci-dessus.
+  throw new HttpError(503, 'ai_error', 'Le modèle IA est indisponible (quota du jour atteint ou erreur temporaire). Réessaie plus tard.');
 }
 
 /** Scripts d'une niche, par lots successifs. Un lot en échec est ignoré : jamais de blocage. */
