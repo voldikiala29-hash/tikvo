@@ -183,7 +183,7 @@ export function validateStory(input: unknown, mode: StoryMode): Story {
     let narration: string | undefined;
     if (sc.narration !== undefined && sc.narration !== null && sc.narration !== '') {
       if (mode === 'dialogue') return fail(`${label} : narration interdite en mode dialogues.`);
-      narration = textOf(sc.narration, 3, 200, `${label} : narration`);
+      narration = textOf(sc.narration, 3, 400, `${label} : narration`);
     }
 
     const rawLines = sc.lines === undefined ? [] : sc.lines;
@@ -313,4 +313,122 @@ export function storyText(story: Story): string {
     .flatMap((scene) => [scene.narration, ...scene.lines.map((l) => l.text)])
     .filter((t): t is string => typeof t === 'string' && t.length > 0)
     .join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Script balisé : le texte de l'utilisateur est lu tel quel, sans passer par le modèle.
+// Format : « [Scène 1 | bureau] », puis « Narrateur : texte », « Karim : texte », « Karim (colere) : texte ».
+// ---------------------------------------------------------------------------
+
+const SCENE_LINE = /^\[\s*sc[èe]ne\s*\d*\s*(?:\|\s*([^\]]*?)\s*)?\]$/i;
+const SPEAKER_LINE = /^([^:()\[\]]{1,40}?)\s*(?:\(([^)]{1,20})\))?\s*:\s*(.+)$/;
+const HAIRS = ['court', 'frange', 'chignon', 'herisse', 'gris'] as const;
+const HAIR_COLORS = ['#2B2B2B', '#6B3E2A', '#8E9399', '#1A1A1A'];
+const SHIRTS = ['#E6EEF8', '#1F2F4D', '#7A4FB8', '#2E7D4F'];
+const EMOTIONS: Record<string, StoryExpression> = {
+  neutre: 'neutre',
+  content: 'content',
+  heureux: 'content',
+  colere: 'colere',
+  triste: 'triste',
+  surpris: 'surpris',
+};
+
+/** Vrai si le texte utilise le format balisé (au moins un marqueur de scène). */
+export function isMarkedScript(raw: string): boolean {
+  return raw.split('\n').some((l) => SCENE_LINE.test(l.trim()));
+}
+
+const foldText = (s: string): string => s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
+
+const slugOf = (name: string): string => {
+  const base = foldText(name).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 20).replace(/-+$/, '');
+  return /^[a-z]/.test(base) && base.length >= 2 ? base : `h-${base}`.slice(0, 20);
+};
+
+/** Durée d'une scène d'après son texte : environ 2,6 mots par seconde, entre 2 et 15 s. */
+function secondsFor(words: number): number {
+  return Math.min(15, Math.max(2, Math.round(words / 2.6) + 1));
+}
+
+/**
+ * Transforme le texte balisé en histoire (à valider ensuite avec validateStory).
+ * Décor : mot-clé du marqueur (bureau, couloir…). Héros : créés à partir des noms, voix féminine si le nom finit par e ou a.
+ */
+export function parseMarkedScript(raw: string): { input: unknown; mode: StoryMode } {
+  // Import local pour éviter un cycle : la mise en scène des décors vit dans cartoon/direction.ts.
+  const scenes: { set: StoryScene['set']; narration: string[]; lines: StoryLine[] }[] = [];
+  const names = new Map<string, string>();
+  const characters: StoryCharacter[] = [];
+
+  const newScene = (decor: string | undefined) => {
+    const set = directSet(decor ?? '');
+    scenes.push({ set, narration: [], lines: [] });
+  };
+
+  for (const rawLine of raw.split('\n')) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const marker = SCENE_LINE.exec(line);
+    if (marker) {
+      newScene(marker[1]);
+      continue;
+    }
+    if (scenes.length === 0) newScene(undefined);
+    const m = SPEAKER_LINE.exec(line);
+    if (!m) throw new Error(`Ligne sans locuteur : « ${line.slice(0, 60)} ». Écris « Narrateur : » ou « Nom : » devant la phrase.`);
+    const name = m[1].trim();
+    const text = m[3].replace(/\s+/g, ' ').trim();
+    const scene = scenes[scenes.length - 1];
+
+    if (foldText(name) === 'narrateur' || foldText(name) === 'narrator') {
+      scene.narration.push(text);
+      continue;
+    }
+    const emotionKey = m[2] ? foldText(m[2]).trim() : 'neutre';
+    const expression = EMOTIONS[emotionKey] ?? 'neutre';
+    let id = names.get(name);
+    if (!id) {
+      if (characters.length >= 4) throw new Error('Quatre héros maximum : vérifie les noms de locuteurs.');
+      id = slugOf(name);
+      while (characters.some((c) => c.id === id)) id = `${id.slice(0, 18)}2`;
+      names.set(name, id);
+      const i = characters.length;
+      const feminine = /[ae]$/i.test(foldText(name).split(' ')[0]);
+      characters.push({
+        id,
+        name: name.slice(0, 30),
+        hair: HAIRS[i % HAIRS.length],
+        hairColor: HAIR_COLORS[i % HAIR_COLORS.length],
+        shirt: SHIRTS[i % SHIRTS.length],
+        tie: i % 2 === 0 ? '#D62B2B' : undefined,
+        glasses: i % 3 === 2,
+        voice: { gender: feminine ? 'f' : 'm', age: 'adulte' },
+      });
+    }
+    scene.lines.push({ speaker: id, text, expression });
+  }
+
+  if (scenes.length === 0) throw new Error('Aucune scène trouvée.');
+  const sceneOut: StoryScene[] = scenes.map((s) => {
+    const narration = s.narration.length > 0 ? s.narration.join(' ') : undefined;
+    const words = [narration ?? '', ...s.lines.map((l) => l.text)].join(' ').split(/\s+/).filter(Boolean).length;
+    return { set: s.set, seconds: secondsFor(words), narration, lines: s.lines, actions: [] };
+  });
+  const hasNarration = sceneOut.some((s) => s.narration);
+  const hasLines = sceneOut.some((s) => s.lines.length > 0);
+  const mode: StoryMode = hasNarration && hasLines ? 'both' : hasNarration ? 'narrator' : 'dialogue';
+  const first = [sceneOut[0].narration, sceneOut[0].lines[0]?.text].find((t): t is string => !!t) ?? 'Histoire';
+  const hook = first.length > 120 ? `${first.slice(0, 117).trim()}…` : first;
+  const title = first.length > 60 ? `${first.slice(0, 57).trim()}…` : first;
+  return { input: { title, hook, mode, characters, scenes: sceneOut }, mode };
+}
+
+/** Mise en scène d'un décor à partir du texte du marqueur (mots-clés, bureau par défaut). */
+function directSet(decor: string): StoryScene['set'] {
+  const t = foldText(decor);
+  if (/reunion|salle/.test(t)) return 'salle-reunion';
+  if (/couloir|porte|escalier|ascenseur/.test(t)) return 'couloir';
+  if (/dehors|exterieur|rue|parking|ville|trottoir|immeuble/.test(t)) return 'exterieur';
+  return 'bureau';
 }

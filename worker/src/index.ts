@@ -7,7 +7,7 @@ import { synthesizeSpeech } from './speech';
 import { KEYWORDS_SYSTEM, keywordsPrompt, parseKeywords } from './keywords';
 import { improveScript } from './improve';
 import { generateStory, suggestSubjects } from './storyGen';
-import { STORY_MODES, type StoryRequest } from '../../src/video-engine/story';
+import { STORY_MODES, isMarkedScript, parseMarkedScript, validateStory, type StoryRequest } from '../../src/video-engine/story';
 import { BRIEF_SYSTEM, buildBriefPrompt, parseBriefPlan } from './briefs';
 import { addUserMedia, cleanDescription, deleteUserMedia, listUserMedia, mediaFileForPipeline, mediaForJob, publicMedia, updateUserMedia, userMediaFile } from './media';
 import { fetchPublicMetadata, parseSourceUrl } from './inspiration';
@@ -486,6 +486,15 @@ async function handleStory(request: Request, env: Env): Promise<Response> {
   const script = typeof body.script === 'string' ? body.script.trim().slice(0, 1500) : '';
   if (source === 'topic' && topic.length < 5) throw new HttpError(400, 'invalid_param', 'Donne un sujet (au moins 5 caractères).');
   if (source === 'script' && script.length < 10) throw new HttpError(400, 'invalid_param', 'Donne un script (au moins 10 caractères).');
+  // Script balisé ([Scène 1 | bureau], « Karim : … ») : lu tel quel, sans l'IA.
+  if (source === 'script' && isMarkedScript(script)) {
+    try {
+      const parsed = parseMarkedScript(script);
+      return respond(request, env, { story: validateStory(parsed.input, parsed.mode), direct: true });
+    } catch (err) {
+      throw new HttpError(400, 'invalid_param', err instanceof Error ? err.message : 'Script balisé invalide.');
+    }
+  }
   const req: StoryRequest = { source, topic, script, mode };
   return respond(request, env, { story: await generateStory(env, req) });
 }
