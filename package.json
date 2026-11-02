@@ -21,6 +21,7 @@
   "dependencies": {
     "@google/genai": "^2.4.0",
     "@remotion/bundler": "4.0.539",
+    "@remotion/google-fonts": "4.0.539",
     "@remotion/media": "4.0.539",
     "@remotion/player": "^4.0.539",
     "@remotion/renderer": "4.0.539",

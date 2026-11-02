@@ -2,6 +2,8 @@
 // iPhone flottant, fenêtre terminal. Styles inline (comme les autres compositions) pour un rendu serveur fiable.
 import React from 'react';
 import { AbsoluteFill, Audio, Sequence, interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
+import { loadFont as loadInter } from '@remotion/google-fonts/Inter';
+import { loadFont as loadMono } from '@remotion/google-fonts/JetBrainsMono';
 import {
   REEL_SCENES,
   REVIEW_COUNT,
@@ -16,8 +18,11 @@ const ORANGE = '#FF6A2B';
 const NAVY_TOP = '#070B25';
 const NAVY_BOTTOM = '#0F1A3D';
 const INK = '#0F1A3D';
-const SANS = 'Inter, Helvetica, Arial, sans-serif';
-const MONO = '"JetBrains Mono", Menlo, Consolas, monospace';
+// Polices Google chargées pour le rendu (sinon : polices de secours du système).
+const { fontFamily: inter } = loadInter();
+const { fontFamily: jetbrains } = loadMono();
+const SANS = `${inter}, Helvetica, Arial, sans-serif`;
+const MONO = `${jetbrains}, Menlo, Consolas, monospace`;
 
 /** Valeur pseudo-aléatoire stable (même résultat à chaque rendu). */
 const rand = (n: number): number => {
