@@ -11,6 +11,7 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit && tsc --noEmit -p pipeline/tsconfig.json",
     "pipeline:test": "node --test pipeline/test/*.test.ts",
+    "remotion:preview": "remotion studio pipeline/remotion/index.ts",
     "pipeline:smoke": "tsx pipeline/smoke.ts",
     "pipeline:render": "tsx pipeline/render.ts",
     "pipeline:publish": "tsx pipeline/publish.ts",
