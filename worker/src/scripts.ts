@@ -31,7 +31,7 @@ export async function runWorkersAi(env: Env, model: string, input: Record<string
 }
 
 const SYSTEM =
-  'Tu es un scénariste expert des vidéos TikTok virales. Tu réponds uniquement avec un tableau JSON valide, sans texte autour.';
+  'Tu es un scénariste expert des vidéos courtes virales. Tu réponds uniquement avec un tableau JSON valide, sans texte autour.';
 
 export function buildPrompt(niche: string, count: number, avoid: string[], brief?: string | null): string {
   const lines = [
@@ -135,7 +135,7 @@ export async function rewriteScript(env: Env, script: string, targetSeconds: num
     'Garde le même sujet et une accroche forte en première ligne. Ton viral, direct, tutoiement. Phrases courtes, pas d’emoji, pas de hashtag, pas de titre.',
     'Réponds uniquement avec le texte du nouveau script, une idée par ligne.',
   ].join('\n');
-  const raw = await callModel(env, prompt, Math.max(600, target * 3), 'Tu es un scénariste expert des vidéos TikTok virales. Tu réponds uniquement avec le texte demandé.');
+  const raw = await callModel(env, prompt, Math.max(600, target * 3), 'Tu es un scénariste expert des vidéos courtes virales. Tu réponds uniquement avec le texte demandé.');
   const text = cleanScriptText(raw);
   const words = text.split(/\s+/).filter(Boolean).length;
   if (text.length < 10 || text.length > 1500 || words < target * 0.6 || words > target * 1.4) {

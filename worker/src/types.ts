@@ -7,13 +7,10 @@ export interface Env {
   GITHUB_REPO?: string;
   GITHUB_BRANCH?: string;
   GITHUB_WORKFLOW?: string;
-  TIKTOK_SCOPES: string;
   EXTRA_ORIGINS?: string;
   ALLOWED_OPEN_IDS?: string;
 
   // Secrets (poussés par le workflow de déploiement)
-  TIKTOK_CLIENT_KEY?: string;
-  TIKTOK_CLIENT_SECRET?: string;
   GH_DISPATCH_TOKEN?: string;
   RENDER_SECRET?: string;
   PEXELS_API_KEY?: string;
@@ -91,7 +88,6 @@ export interface PublishInfo {
   publishAt?: number; // ms epoch, programmation
   apiUrl?: string; // origine du Worker, transmise au workflow de publication
   publishId?: string;
-  tiktokStatus?: string;
   postIds?: string[];
   username?: string;
   error?: string | null;

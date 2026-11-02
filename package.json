@@ -14,7 +14,6 @@
     "remotion:preview": "remotion studio pipeline/remotion/index.ts",
     "pipeline:smoke": "tsx pipeline/smoke.ts",
     "pipeline:render": "tsx pipeline/render.ts",
-    "pipeline:publish": "tsx pipeline/publish.ts",
     "worker:typecheck": "tsc --noEmit -p worker/tsconfig.json",
     "worker:deploy": "wrangler deploy --config worker/wrangler.toml"
   },

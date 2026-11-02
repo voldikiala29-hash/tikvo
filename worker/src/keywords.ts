@@ -6,7 +6,7 @@ export const MAX_KEYWORDS = 3;
 
 export function keywordsPrompt(script: string): string {
   return [
-    `Extrait ${MAX_KEYWORDS} mots-clés visuels en ANGLAIS pour chercher une vidéo stock (Pixabay) à partir de ce script TikTok :`,
+    `Extrait ${MAX_KEYWORDS} mots-clés visuels en ANGLAIS pour chercher une vidéo stock (Pixabay) à partir de ce script :`,
     `« ${script} »`,
     'Réponds uniquement par un objet JSON de la forme {"keywords": ["morning routine mistake", "tired woman bed", "alarm clock"]}.',
     'Mots-clés très visuels et concrets (sujet, action, lieu, émotion montrable), jamais abstraits.',

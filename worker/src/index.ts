@@ -2,7 +2,7 @@ import { dispatchWorkflow } from './github';
 import { requireFirebaseUser, searchStockVideos } from './pexels';
 import { createRender, getRender, listDayRenders, parseRenderInput } from './renders';
 import { callModel, generateNicheScripts, rewriteScript, AI_MODEL, runWorkersAi, textModels } from './scripts';
-import { ANALYZE_MODEL, TTS_MODEL, dedupe, extractWorkersAiText } from './aiModels';
+import { TTS_MODEL, dedupe, extractWorkersAiText } from './aiModels';
 import { synthesizeSpeech } from './speech';
 import { KEYWORDS_SYSTEM, keywordsPrompt, parseKeywords } from './keywords';
 import { improveScript } from './improve';
@@ -11,7 +11,6 @@ import { STORY_MODES, isMarkedScript, parseMarkedScript, validateStory, type Sto
 import { parseReel } from '../../src/video-engine/reel/parse';
 import { BRIEF_SYSTEM, buildBriefPrompt, parseBriefPlan } from './briefs';
 import { addUserMedia, cleanDescription, deleteUserMedia, listUserMedia, mediaFileForPipeline, mediaForJob, publicMedia, updateUserMedia, userMediaFile } from './media';
-import { fetchPublicMetadata, parseSourceUrl } from './inspiration';
 import { cleanScriptText, ScriptItem } from './scriptParse';
 import { resolveRenderSettings } from './renderSettings';
 import { parseScriptRequest } from './scriptParse';
@@ -241,7 +240,6 @@ async function handleInternalPatchJob(request: Request, env: Env, id: string): P
   if (body.publish !== undefined) {
     const patch = asRecord(body.publish);
     if (typeof patch.publishId === 'string') publish.publishId = patch.publishId.slice(0, 80);
-    if (typeof patch.tiktokStatus === 'string') publish.tiktokStatus = patch.tiktokStatus.slice(0, 60);
     if (Array.isArray(patch.postIds)) publish.postIds = patch.postIds.map((p) => String(p).slice(0, 40)).slice(0, 5);
     if (patch.error === null) publish.error = null;
     else if (typeof patch.error === 'string') publish.error = patch.error.slice(0, 500);
@@ -373,67 +371,6 @@ async function loadBrief(env: Env, uid: string): Promise<string | null> {
 const MAX_SOURCES = 20;
 const NOTES_MAX = 2000;
 
-async function handleListInspiration(request: Request, env: Env): Promise<Response> {
-  const user = await requireFirebaseUser(request, env);
-  const rows = await env.DB.prepare(
-    'SELECT id, url, platform, title, author, notes, created_at FROM inspiration_sources WHERE uid = ? ORDER BY created_at DESC LIMIT 50',
-  )
-    .bind(user.uid)
-    .all<{ id: string; url: string; platform: string; title: string | null; author: string | null; notes: string; created_at: number }>();
-  const sources = (rows.results ?? []).map((r) => ({
-    id: r.id,
-    url: r.url,
-    platform: r.platform,
-    title: r.title,
-    author: r.author,
-    notes: r.notes,
-    createdAt: r.created_at,
-  }));
-  return respond(request, env, { sources, brief: await loadBrief(env, user.uid) });
-}
-
-async function handleAddInspiration(request: Request, env: Env): Promise<Response> {
-  const user = await requireFirebaseUser(request, env);
-  const body = await readJson(request);
-  const { url, platform } = parseSourceUrl(body.url);
-  const count = await env.DB.prepare('SELECT COUNT(*) AS n FROM inspiration_sources WHERE uid = ?')
-    .bind(user.uid)
-    .first<{ n: number }>();
-  if ((count?.n ?? 0) >= MAX_SOURCES) throw new HttpError(400, 'limit', `Maximum ${MAX_SOURCES} sources.`);
-
-  const existing = await env.DB.prepare('SELECT id FROM inspiration_sources WHERE uid = ? AND url = ?')
-    .bind(user.uid, url)
-    .first<{ id: string }>();
-  if (existing) throw new HttpError(409, 'duplicate', 'Cette source est déjà dans ta liste.');
-
-  const meta = await fetchPublicMetadata(platform, url);
-  const id = crypto.randomUUID();
-  await env.DB.prepare(
-    'INSERT INTO inspiration_sources (id, uid, url, platform, title, author, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-  )
-    .bind(id, user.uid, url, platform, meta.title, meta.author, '', Date.now())
-    .run();
-  return respond(request, env, { source: { id, url, platform, title: meta.title, author: meta.author, notes: '', createdAt: Date.now() } }, 201);
-}
-
-async function handleUpdateInspiration(request: Request, env: Env, id: string): Promise<Response> {
-  const user = await requireFirebaseUser(request, env);
-  const body = await readJson(request);
-  const notes = typeof body.notes === 'string' ? body.notes.trim() : null;
-  if (notes === null || notes.length > NOTES_MAX) throw new HttpError(400, 'invalid_param', `Texte trop long (${NOTES_MAX} caractères max).`);
-  const result = await env.DB.prepare('UPDATE inspiration_sources SET notes = ? WHERE id = ? AND uid = ?')
-    .bind(notes, id, user.uid)
-    .run();
-  if (!result.meta?.changes) throw new HttpError(404, 'not_found', 'Source introuvable.');
-  return respond(request, env, { ok: true });
-}
-
-async function handleDeleteInspiration(request: Request, env: Env, id: string): Promise<Response> {
-  const user = await requireFirebaseUser(request, env);
-  await env.DB.prepare('DELETE FROM inspiration_sources WHERE id = ? AND uid = ?').bind(id, user.uid).run();
-  return respond(request, env, { ok: true });
-}
-
 /** Llama résume le style commun des sources (titres, auteurs, textes collés) en quelques lignes. */
 /**
  * Diagnostic des modèles gratuits : texte (chaque modèle de AI_TEXT_MODELS) et voix (MeloTTS).
@@ -536,40 +473,6 @@ async function handleTtsFree(request: Request, env: Env): Promise<Response> {
   const jobId = typeof body.jobId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(body.jobId) ? body.jobId : null;
   const audio = await synthesizeSpeech(env, text, lang, jobId);
   return new Response(audio, { headers: { 'Content-Type': 'audio/mpeg', 'X-Voice-Engine': 'melotts' } });
-}
-
-async function handleAnalyzeInspiration(request: Request, env: Env): Promise<Response> {
-  const user = await requireFirebaseUser(request, env);
-  const rows = await env.DB.prepare('SELECT platform, title, author, notes FROM inspiration_sources WHERE uid = ? LIMIT 20')
-    .bind(user.uid)
-    .all<{ platform: string; title: string | null; author: string | null; notes: string }>();
-  const sources = rows.results ?? [];
-  if (sources.length === 0) throw new HttpError(400, 'no_sources', 'Ajoute au moins une source avant l’analyse.');
-
-  const described = sources
-    .map((s, i) => {
-      const parts = [s.title ? `titre : ${s.title}` : null, s.author ? `auteur : ${s.author}` : null, s.notes ? `texte : ${s.notes}` : null];
-      return `${i + 1}. ${s.platform}${parts.filter(Boolean).length ? ' — ' + parts.filter(Boolean).join(' ; ') : ' — (aucune information lisible, à déduire du lien)'}`;
-    })
-    .join('\n');
-  const prompt = [
-    'Voici des vidéos ou pages que l’utilisateur veut imiter :',
-    described,
-    '',
-    'Décris en 5 lignes maximum le style commun : type d’accroche, longueur des phrases, ton, structure du script, sujets récurrents.',
-    'Réponds uniquement avec ces lignes, en français.',
-  ].join('\n');
-  // Modèle rapide d'abord, puis les modèles de texte en secours.
-  const raw = await callModel(env, prompt, 500, 'Tu es un analyste de contenus vidéo. Tu réponds de façon concise.', dedupe([ANALYZE_MODEL, ...textModels(env)]));
-  const brief = cleanScriptText(raw).slice(0, 800);
-  if (brief.length < 20) throw new HttpError(502, 'analysis_failed', 'L’analyse n’a rien donné. Réessaie.');
-
-  await env.DB.prepare(
-    'INSERT INTO style_briefs (uid, brief, updated_at) VALUES (?, ?, ?) ON CONFLICT(uid) DO UPDATE SET brief = excluded.brief, updated_at = excluded.updated_at',
-  )
-    .bind(user.uid, brief, Date.now())
-    .run();
-  return respond(request, env, { brief });
 }
 
 async function handleRewriteScript(request: Request, env: Env): Promise<Response> {
@@ -677,18 +580,11 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (method === 'POST' && path === '/api/render') return handleRenderCreate(request, env);
   if (method === 'POST' && path === '/api/generate-scripts') return handleGenerateScripts(request, env);
   if (method === 'POST' && path === '/api/rewrite-script') return handleRewriteScript(request, env);
-  if (path === '/api/inspiration' && method === 'GET') return handleListInspiration(request, env);
-  if (path === '/api/inspiration' && method === 'POST') return handleAddInspiration(request, env);
-  if (path === '/api/inspiration/analyze' && method === 'POST') return handleAnalyzeInspiration(request, env);
-  if (path === '/api/analyze-style' && method === 'POST') return handleAnalyzeInspiration(request, env);
   if (path === '/api/story/subjects' && method === 'GET') return handleStorySubjects(request, env);
   if (path === '/api/story' && method === 'POST') return handleStory(request, env);
   if (path === '/api/reel' && method === 'POST') return handleReel(request, env);
   if (path === '/api/test-ai' && method === 'GET') return handleTestAi(request, env);
   if (path === '/api/tts-free' && method === 'POST') return handleTtsFree(request, env);
-  const inspirationId = path.match(/^\/api\/inspiration\/([0-9a-f-]{36})$/);
-  if (inspirationId && method === 'PUT') return handleUpdateInspiration(request, env, inspirationId[1]);
-  if (inspirationId && method === 'DELETE') return handleDeleteInspiration(request, env, inspirationId[1]);
   if (path === '/api/settings' && method === 'GET') return handleGetSettings(request, env);
   if (path === '/api/settings' && method === 'PUT') return handlePutSettings(request, env);
   if (path === '/api/script-overrides' && method === 'GET') return handleGetOverrides(request, env);
