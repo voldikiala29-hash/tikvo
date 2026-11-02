@@ -6,8 +6,8 @@ import { FPS } from '../timeline.ts';
 import { Character } from './Character.tsx';
 import { CartoonSet } from './Sets.tsx';
 import { poseFor, REST_POSE, type Pose } from './poses.ts';
-import { visemeOpen } from './lipsync.ts';
-import type { CartoonProps, CartoonScene } from './props.ts';
+import { idleFor } from './idle.ts';
+import { expressionAt, type CartoonProps, type CartoonScene, type CartoonUtterance } from './props.ts';
 
 const clamp = { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' } as const;
 const resolveSrc = (src: string): string => (/^(https?:)?\/\//.test(src) ? src : staticFile(src));
@@ -123,7 +123,7 @@ export const CartoonTemplate: React.FC<CartoonProps> = ({
     <AbsoluteFill style={{ backgroundColor: '#000000', fontFamily: 'Arial, Helvetica, sans-serif' }}>
       {scenes.map((scene, i) => (
         <Sequence key={i} from={scene.from} durationInFrames={scene.durationInFrames}>
-          <SceneView scene={scene} width={width} height={height} speakingKey={speakingKey} mouth={mouth} />
+          <SceneView scene={scene} width={width} height={height} utterances={utterances} />
         </Sequence>
       ))}
 

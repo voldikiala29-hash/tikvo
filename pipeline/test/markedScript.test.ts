@@ -73,3 +73,37 @@ test('script balisé : geste inconnu ou héros absent signalés', () => {
   assert.throws(() => parseMarkedScript('[Scène 1 | bureau]\nNarrateur : Bonjour.\n[Geste : pleurer]'), /Geste sans héros/);
   assert.throws(() => parseMarkedScript('[Scène 1 | bureau]\nNarrateur : Bonjour.\n[Geste : Zoé pleurer]'), /héros « Zoé » inconnu/);
 });
+
+test('animation : émotion déduite du texte quand elle n’est pas écrite', () => {
+  const raw = `[Scène 1 | bureau]
+Narrateur : Karim regarde son écran sans y croire.
+Karim : Ce n'est pas possible, c'est incroyable !
+[Scène 2 | couloir]
+Narrateur : Il traverse le couloir d'un pas pressé jusqu'à la porte du directeur.
+Monsieur Dubois : Entrez.`;
+  const story = validateStory(parseMarkedScript(raw).input, 'both');
+  assert.equal(story.scenes[0].lines[0].expression, 'surpris');
+});
+
+test('animation : gestes déduits du texte, héros nommé dans la phrase', () => {
+  const raw = `[Scène 1 | bureau]
+Narrateur : Karim se lève de sa chaise et traverse le bureau en silence.
+Karim : Enfin !
+[Scène 2 | couloir]
+Narrateur : Monsieur Dubois applaudit à la porte du bureau.
+Monsieur Dubois : Bravo.`;
+  const story = validateStory(parseMarkedScript(raw).input, 'both');
+  assert.deepEqual(story.scenes[0].actions, [{ actor: 'karim', action: 'marcher' }]);
+  assert.deepEqual(story.scenes[1].actions, [{ actor: 'monsieur-dubois', action: 'applaudir' }]);
+});
+
+test('animation : un geste écrit remplace les gestes déduits', () => {
+  const raw = `[Scène 1 | bureau]
+Narrateur : Karim traverse le bureau sans un mot, les épaules basses et le regard fixé sur la porte du fond.
+[Geste : Karim immobile]
+Karim : Bonjour à tous, je suis là.
+[Scène 2 | couloir]
+Narrateur : Le couloir est vide et silencieux, seules les lumières clignotent au plafond.`;
+  const story = validateStory(parseMarkedScript(raw).input, 'both');
+  assert.deepEqual(story.scenes[0].actions, [{ actor: 'karim', action: 'immobile' }]);
+});
