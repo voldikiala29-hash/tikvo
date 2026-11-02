@@ -159,7 +159,9 @@ export interface RenderRequest {
   /** Plans voulus, dans l'ordre (facultatif). */
   storyboard?: { text: string; seconds: number | null }[];
   /** Style : plans Pixabay (défaut) ou dessin animé. */
-  style?: 'stock' | 'cartoon';
+  style?: 'stock' | 'cartoon' | 'reel';
+  /** Reel « Replica / Motion » (style reel). */
+  reel?: import('../video-engine/reel/props').ReelProps;
   /** Personnage principal du dessin animé (identifiant du catalogue). */
   mainCharacter?: string;
   /** Histoire en dessin animé (héros, scènes, répliques) : remplace le script pour le montage. */

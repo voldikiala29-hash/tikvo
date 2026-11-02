@@ -3,7 +3,7 @@ import path from 'node:path';
 import { bundle } from '@remotion/bundler';
 import { ensureBrowser, renderMedia, selectComposition } from '@remotion/renderer';
 /** Composition Remotion à rendre : « Viral » (plans Pixabay) ou « Cartoon » (dessin animé). */
-export type CompositionId = 'Viral' | 'Cartoon';
+export type CompositionId = 'Viral' | 'Cartoon' | 'Reel';
 
 export async function renderViral(options: {
   props: object;

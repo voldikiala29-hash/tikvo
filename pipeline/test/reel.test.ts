@@ -60,3 +60,13 @@ test('reel : une police qui tient garde sa taille, sinon elle rétrécit sans pa
   assert.ok(shrunk < 44 && shrunk >= 24);
   assert.equal(fitFontSize('x'.repeat(500), 100, 44, 24), 24);
 });
+
+import { reelScript, validateReelProps } from '../../src/video-engine/reel/parse.ts';
+
+test('reel : props saisies validées, script dérivé du contenu', () => {
+  const reel = validateReelProps(JSON.parse(goodJson));
+  assert.equal(reel.appName, 'Notion');
+  assert.ok(reelScript(reel).includes('REPLICA'));
+  assert.ok(reelScript(reel).length >= 10);
+  assert.throws(() => validateReelProps(null));
+});
