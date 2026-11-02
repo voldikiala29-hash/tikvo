@@ -31,3 +31,14 @@ export function parseReel(raw: string): ReelProps {
   };
 }
 
+
+/** Props d'un reel saisies par l'utilisateur : mêmes règles strictes que la sortie du modèle. */
+export function validateReelProps(value: unknown): ReelProps {
+  if (!value || typeof value !== 'object') throw new Error('reel attendu');
+  return parseReel(JSON.stringify(value));
+}
+
+/** Texte du script d'un reel (sert de script au pipeline : durée, mots-clés, traces). */
+export function reelScript(reel: ReelProps): string {
+  return `${reel.hook}. ${reel.priceItems.map((p) => p.name).join(', ')}. ${reel.appName} : écris ${reel.ctaKeyword}.`.slice(0, 1500);
+}

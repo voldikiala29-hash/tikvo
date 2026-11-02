@@ -19,6 +19,7 @@ import type { SceneClip, SceneWindow } from './scenes.ts';
 import { FPS, alignedWords } from '../src/video-engine/timeline.ts';
 import { renderViral, type CompositionId } from './renderer.ts';
 import type { JobData } from './lib.ts';
+import { validateReelProps } from '../src/video-engine/reel/parse.ts';
 import { synthesizeVoice } from './tts.ts';
 import { resolveVoice, voiceLabel } from '../src/video-engine/voices.ts';
 import { aspectSize, clipCountFor, resolveRenderSettings } from '../src/video-engine/montage.ts';
@@ -121,6 +122,8 @@ async function renderStoryJob(options: {
   publicDir: string;
 }): Promise<void> {
   const { story, params, settings, workDir, publicDir } = options;
+  const t0 = Date.now();
+  const lap = (label: string) => console.log(`[temps] ${label} : ${((Date.now() - t0) / 1000).toFixed(1)} s depuis le début`);
   const size = aspectSize(settings.aspect);
   const narratorVoice = resolveVoice(params.niche?.id, settings.voice, settings.voiceStyle);
 
@@ -224,6 +227,42 @@ async function renderStoryJob(options: {
   console.log(`Terminé : ${videoUrl} (${(info.size / 1048576).toFixed(1)} Mo, ${info.duration.toFixed(1)} s, ${size.width}×${size.height})`);
 }
 
+/** Reel « Replica / Motion » : montage Remotion direct, sans voix off pour l'instant (voiceOverUrl vide). */
+async function renderReelJob(options: { params: JobData['params']; size: { width: number; height: number }; workDir: string; publicDir: string }): Promise<void> {
+  const { params, size, workDir, publicDir } = options;
+  const reel = validateReelProps(params.reel);
+  await reporter.report('Montage Remotion (reel) : préparation…', 10, true);
+  const outFile = path.join(workDir, `${jobId}.mp4`);
+  await renderViral({
+    props: reel,
+    composition: 'Reel',
+    publicDir,
+    outFile,
+    onBundleProgress: (p) => void reporter.report(`Montage Remotion : préparation (${p} %)…`, 10 + Math.round(p * 0.2)),
+    onRenderProgress: (p) => void reporter.report(`Rendu ${size.width}×${size.height} (${p} %)…`, 30 + Math.round(p * 0.6)),
+  });
+  await reporter.report('Contrôle de la vidéo…', 91, true);
+  const info = await probe(outFile);
+  if (info.videoCodec !== 'h264') throw new Error(`Codec inattendu : ${info.videoCodec}`);
+  if (info.width !== size.width || info.height !== size.height) {
+    throw new Error(`Dimensions inattendues : ${info.width}×${info.height} (attendu ${size.width}×${size.height})`);
+  }
+  if (info.size > MAX_BYTES) throw new Error(`Vidéo trop lourde (${Math.round(info.size / 1048576)} Mo, maximum 60 Mo).`);
+  await reporter.report('Envoi de la vidéo…', 94, true);
+  const videoUrl = await uploadRelease(outFile, `${jobId}.mp4`);
+  await pruneOldAssets();
+  await api.patchJob(jobId, {
+    status: 'rendered',
+    step: 'Vidéo prête · reel (sans voix off)',
+    progress: 100,
+    videoUrl,
+    videoBytes: info.size,
+    durationSec: Math.round(info.duration * 10) / 10,
+    error: null,
+  });
+  console.log(`Terminé : ${videoUrl} (${info.duration.toFixed(1)} s, ${size.width}×${size.height})`);
+}
+
 async function main(): Promise<void> {
   const job = await api.getJob(jobId);
   const params = job.params;
@@ -236,6 +275,11 @@ async function main(): Promise<void> {
   await rm(workDir, { recursive: true, force: true });
   await mkdir(path.join(publicDir, 'clips'), { recursive: true });
   await mkdir(path.join(publicDir, 'audio'), { recursive: true });
+
+  if (params.style === 'reel') {
+    await renderReelJob({ params, size, workDir, publicDir });
+    return;
+  }
 
   if (params.story) {
     await renderStoryJob({ story: params.story as Story, params, settings, workDir, publicDir });

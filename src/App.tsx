@@ -2,10 +2,7 @@ import React from 'react';
 import { FirebaseProvider, useFirebase } from './contexts/FirebaseContext';
 import { useUserProfile } from './hooks/useUserProfile';
 import { LoginView } from './views/LoginView';
-import { OnboardingNiches } from './views/OnboardingNiches';
-import { ProgramDurationView } from './views/ProgramDuration';
-import { ProgramView } from './views/ProgramView';
-import { FactoryHome } from './views/FactoryHome';
+import { GeneratorView } from './views/GeneratorView';
 
 const Shell: React.FC<{ email?: string | null; onLogout: () => void; children: React.ReactNode }> = ({
   email,
@@ -58,19 +55,7 @@ function FactoryGate() {
     );
   }
 
-  const step = profile?.onboardingStep ?? null;
-  const hasNiches = (profile?.niches.length ?? 0) > 0;
-
-  let body: React.ReactNode;
-  if (!profile || step === null || step === 'niches' || !hasNiches) {
-    body = <OnboardingNiches uid={user.uid} initial={profile?.niches ?? []} />;
-  } else if (step === 'duration') {
-    body = <ProgramDurationView uid={user.uid} />;
-  } else if (step === 'generating') {
-    body = <ProgramView uid={user.uid} profile={profile} />;
-  } else {
-    body = <FactoryHome uid={user.uid} profile={profile} />;
-  }
+  const body = <GeneratorView uid={user.uid} />;
 
   return (
     <Shell email={user.email} onLogout={() => logout()}>
