@@ -4,6 +4,8 @@ import { ViralTemplate } from '../../src/video-engine/ViralTemplate';
 import type { ViralTemplateProps } from '../../src/video-engine/types';
 import { CartoonTemplate } from '../../src/video-engine/cartoon/CartoonTemplate';
 import type { CartoonProps } from '../../src/video-engine/cartoon/props';
+import { ReelTemplate } from '../../src/video-engine/reel/ReelTemplate';
+import { REEL_DEFAULTS, REEL_DURATION_FRAMES, type ReelProps } from '../../src/video-engine/reel/props';
 
 const defaultProps: ViralTemplateProps = {
   hookText: 'tikvo',
@@ -56,6 +58,15 @@ export const Root: React.FC = () => (
         width: props.width ?? 1080,
         height: props.height ?? 1920,
       })}
+    />
+    <Composition
+      id="Reel"
+      component={ReelTemplate}
+      width={1080}
+      height={1920}
+      fps={30}
+      durationInFrames={REEL_DURATION_FRAMES}
+      defaultProps={REEL_DEFAULTS as ReelProps}
     />
   </>
 );
