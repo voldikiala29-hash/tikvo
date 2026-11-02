@@ -8,6 +8,7 @@ import { KEYWORDS_SYSTEM, keywordsPrompt, parseKeywords } from './keywords';
 import { improveScript } from './improve';
 import { generateStory, reserveStoryQuota, suggestSubjects } from './storyGen';
 import { STORY_MODES, isMarkedScript, parseMarkedScript, validateStory, type StoryRequest } from '../../src/video-engine/story';
+import { parseReel } from '../../src/video-engine/reel/parse';
 import { BRIEF_SYSTEM, buildBriefPrompt, parseBriefPlan } from './briefs';
 import { addUserMedia, cleanDescription, deleteUserMedia, listUserMedia, mediaFileForPipeline, mediaForJob, publicMedia, updateUserMedia, userMediaFile } from './media';
 import { fetchPublicMetadata, parseSourceUrl } from './inspiration';
@@ -476,6 +477,33 @@ async function handleStorySubjects(request: Request, env: Env): Promise<Response
 }
 
 /** Histoire à partir d'un sujet (choisi ou écrit) ou d'un script fourni, dans le mode demandé. */
+const REEL_SYSTEM = 'Tu écris des scripts courts de Reels en français pour vendre une skill Claude. Tu réponds uniquement avec un objet JSON valide.';
+
+function reelPrompt(idea: string): string {
+  return `Idée : ${idea}
+Réponds avec ce JSON exact, sans texte autour :
+{"hook": "accroche de 3 secondes, 5 à 9 mots ; le dernier mot est le mot-clé",
+ "priceItems": [{"name": "outil payant réaliste", "price": 29}],  (3 à 5 outils, prix mensuels en euros entiers)
+ "appName": "nom de l'application analysée",
+ "ctaKeyword": "MOT EN MAJUSCULES de 4 à 10 lettres",
+ "skills": ["11 noms courts en minuscules sans espace, une par fonction"]}`;
+}
+
+/** Génère les props d'un reel « Replica / Motion » à partir d'une idée (quota partagé avec les histoires). */
+async function handleReel(request: Request, env: Env): Promise<Response> {
+  const user = await requireFirebaseUser(request, env);
+  const body = await readJson(request);
+  const idea = typeof body.idea === 'string' ? body.idea.replace(/\s+/g, ' ').trim().slice(0, 200) : '';
+  if (idea.length < 5) throw new HttpError(400, 'invalid_param', 'Donne une idée (au moins 5 caractères).');
+  await reserveStoryQuota(env, user.uid);
+  const raw = await callModel(env, reelPrompt(idea), 1200, REEL_SYSTEM);
+  try {
+    return respond(request, env, { props: parseReel(raw) });
+  } catch (err) {
+    throw new HttpError(502, 'generation_failed', `Reel non généré : ${err instanceof Error ? err.message : 'format inattendu'}`);
+  }
+}
+
 async function handleStory(request: Request, env: Env): Promise<Response> {
   const user = await requireFirebaseUser(request, env);
   const body = await readJson(request);
@@ -655,6 +683,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === '/api/analyze-style' && method === 'POST') return handleAnalyzeInspiration(request, env);
   if (path === '/api/story/subjects' && method === 'GET') return handleStorySubjects(request, env);
   if (path === '/api/story' && method === 'POST') return handleStory(request, env);
+  if (path === '/api/reel' && method === 'POST') return handleReel(request, env);
   if (path === '/api/test-ai' && method === 'GET') return handleTestAi(request, env);
   if (path === '/api/tts-free' && method === 'POST') return handleTtsFree(request, env);
   const inspirationId = path.match(/^\/api\/inspiration\/([0-9a-f-]{36})$/);
