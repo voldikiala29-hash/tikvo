@@ -7,6 +7,7 @@ import { loadFont as loadMono } from '@remotion/google-fonts/JetBrainsMono';
 import {
   REEL_SCENES,
   REVIEW_COUNT,
+  fitFontSize,
   gridSkills,
   hookHighlight,
   totalPrice,
@@ -201,13 +202,13 @@ function Pain({ priceItems }: { priceItems: ReelProps['priceItems'] }): React.Re
           const e = enterAt(frame, fps, i * 8);
           return (
             <Card key={`${item.name}-${i}`} style={{ padding: '36px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', opacity: e, transform: `translateX(${(1 - e) * 200}px)` }}>
-              <span style={{ fontFamily: SANS, fontWeight: 700, fontSize: 44, color: INK }}>{item.name}</span>
+              <span style={{ fontFamily: SANS, fontWeight: 700, fontSize: fitFontSize(item.name, 600, 44), color: INK }}>{item.name}</span>
               <span style={{ fontFamily: SANS, fontWeight: 700, fontSize: 44, color: INK }}>{item.price} €</span>
             </Card>
           );
         })}
         <Card style={{ padding: '40px', textAlign: 'center', opacity: totalIn, transform: `scale(${0.9 + 0.1 * totalIn})` }}>
-          <span style={{ fontFamily: SANS, fontWeight: 900, fontSize: 56, color: INK }}>Total : {total} € / mois</span>
+          <span style={{ fontFamily: SANS, fontWeight: 900, fontSize: fitFontSize(`Total : ${total} € / mois`, 760, 56), color: INK }}>Total : {total} € / mois</span>
         </Card>
       </div>
     </AbsoluteFill>
@@ -226,7 +227,7 @@ function Solution({ appName, skills }: { appName: string; skills: string[] }): R
       <Glow x={540} y={960} size={820} />
       <Card style={{ position: 'absolute', left: 80, right: 80, top: 200, padding: 0, overflow: 'hidden', opacity: windowIn, transform: `translateY(${(1 - windowIn) * 60}px)` }}>
         <div style={{ padding: '18px 24px', background: '#E8ECF5', fontFamily: MONO, fontSize: 28, color: INK }}>github.com/{appName.toLowerCase()}/replica</div>
-        <div style={{ padding: 40, fontFamily: SANS, fontWeight: 700, fontSize: 52, color: INK }}>
+        <div style={{ padding: 40, fontFamily: SANS, fontWeight: 700, fontSize: fitFontSize(`Une skill par fonction x${visible}`, 840, 52), color: INK }}>
           Une skill par fonction <span style={{ color: ORANGE }}>x{visible}</span>
         </div>
       </Card>
@@ -235,7 +236,7 @@ function Solution({ appName, skills }: { appName: string; skills: string[] }): R
           const e = i < visible ? enterAt(frame, fps, i * 4) : 0;
           return (
             <Card key={`${skill}-${i}`} style={{ padding: '36px 20px', textAlign: 'center', opacity: i < visible ? 1 : 0.15, transform: `scale(${0.85 + 0.15 * e})` }}>
-              <span style={{ fontFamily: MONO, fontSize: 30, color: INK }}>{skill}</span>
+              <span style={{ fontFamily: MONO, fontSize: fitFontSize(skill, 250, 30), color: INK }}>{skill}</span>
             </Card>
           );
         })}
@@ -291,7 +292,7 @@ function Twist(): React.ReactElement {
     <AbsoluteFill>
       <Glow x={540} y={960} size={820} />
       <Card style={{ position: 'absolute', left: 80, right: 80, top: 260, padding: 48, opacity: titleIn, transform: `translateY(${(1 - titleIn) * 60}px)` }}>
-        <div style={{ fontFamily: SANS, fontWeight: 900, fontSize: 64, lineHeight: 0.9, color: INK }}>Rapport {count} avis</div>
+        <div style={{ fontFamily: SANS, fontWeight: 900, fontSize: fitFontSize(`Rapport ${count} avis`, 824, 64), lineHeight: 0.9, color: INK }}>Rapport {count} avis</div>
         <div style={{ marginTop: 40, display: 'flex', flexDirection: 'column', gap: 26 }}>
           {sources.map((src, i) => {
             const largest = Math.max(...sources.map((x) => x.value));

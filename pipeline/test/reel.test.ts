@@ -51,3 +51,12 @@ test('reel : refuse un mot-clé non alphabétique ou un prix hors limites', () =
   assert.throws(() => parseReel(goodJson.replace('REPLICA', 'REPLICA2')));
   assert.throws(() => parseReel(goodJson.replace('"price":29', '"price":-4')));
 });
+
+import { fitFontSize } from '../../src/video-engine/reel/props.ts';
+
+test('reel : une police qui tient garde sa taille, sinon elle rétrécit sans passer sous le minimum', () => {
+  assert.equal(fitFontSize('Court', 600, 44), 44);
+  const shrunk = fitFontSize('Un nom d’outil beaucoup trop long pour la carte', 600, 44);
+  assert.ok(shrunk < 44 && shrunk >= 24);
+  assert.equal(fitFontSize('x'.repeat(500), 100, 44, 24), 24);
+});

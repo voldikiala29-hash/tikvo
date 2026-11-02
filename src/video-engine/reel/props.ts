@@ -79,3 +79,13 @@ export function hookHighlight(hook: string): { before: string; keyword: string }
 export function gridSkills(skills: string[]): string[] {
   return skills.slice(0, SKILL_GRID_SIZE);
 }
+
+/**
+ * Taille de police pour qu'un texte tienne dans `maxWidth` (estimation : ~0,56 em par caractère en gras).
+ * Ne descend jamais sous `minSize`. Sert à garder chaque texte dans sa carte.
+ */
+export function fitFontSize(text: string, maxWidth: number, baseSize: number, minSize = 24, charEm = 0.56): number {
+  const needed = text.length * charEm * baseSize;
+  if (needed <= maxWidth) return baseSize;
+  return Math.max(minSize, Math.floor((baseSize * maxWidth) / needed));
+}
