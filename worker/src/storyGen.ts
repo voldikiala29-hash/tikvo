@@ -29,3 +29,19 @@ export async function suggestSubjects(env: Env): Promise<string[]> {
     return SUBJECT_FALLBACK;
   }
 }
+
+export const STORY_DAILY_LIMIT = 30;
+
+/** Compte une génération par IA pour le jour (UTC) ; refuse au-delà de la limite. Le mode script balisé n'est pas compté. */
+export async function reserveStoryQuota(env: Env, uid: string): Promise<void> {
+  const day = new Date().toISOString().slice(0, 10);
+  const row = await env.DB.prepare('SELECT n FROM story_usage WHERE uid = ? AND day = ?').bind(uid, day).first<{ n: number }>();
+  if ((row?.n ?? 0) >= STORY_DAILY_LIMIT) {
+    throw new HttpError(429, 'quota', `Limite quotidienne atteinte (${STORY_DAILY_LIMIT} générations d'histoires par jour).`);
+  }
+  await env.DB.prepare(
+    'INSERT INTO story_usage (uid, day, n) VALUES (?, ?, 1) ON CONFLICT(uid, day) DO UPDATE SET n = n + 1',
+  )
+    .bind(uid, day)
+    .run();
+}

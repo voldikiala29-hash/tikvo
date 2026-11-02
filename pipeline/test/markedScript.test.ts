@@ -54,3 +54,22 @@ test('script balisé : voix féminine pour un nom finissant par e, quatre héros
 test('script balisé : une ligne sans locuteur est signalée', () => {
   assert.throws(() => parseMarkedScript('[Scène 1 | bureau]\nune phrase sans personne'), /Ligne sans locuteur/);
 });
+
+test('script balisé : geste lu dans la scène, héros reconnu même sans majuscule', () => {
+  const raw = `[Scène 1 | bureau]
+Narrateur : Karim ouvre sa fiche de paie sur son écran, et il lit le montant plusieurs fois avant de comprendre ce qui se passe.
+[Geste : Karim lever les bras]
+Karim : Enfin, la bonne nouvelle arrive après tous ces mois d'attente !
+[Scène 2 | couloir]
+Narrateur : Il pleure en silence dans le couloir, sans que personne ne le remarque vraiment ce matin-là.
+[Geste : karim pleurer]`;
+  const story = validateStory(parseMarkedScript(raw).input, 'both');
+  assert.deepEqual(story.scenes[0].actions, [{ actor: 'karim', action: 'lever-bras' }]);
+  assert.deepEqual(story.scenes[1].actions, [{ actor: 'karim', action: 'pleurer' }]);
+});
+
+test('script balisé : geste inconnu ou héros absent signalés', () => {
+  assert.throws(() => parseMarkedScript('[Scène 1 | bureau]\nNarrateur : Bonjour.\n[Geste : Karim danser]'), /Geste inconnu/);
+  assert.throws(() => parseMarkedScript('[Scène 1 | bureau]\nNarrateur : Bonjour.\n[Geste : pleurer]'), /Geste sans héros/);
+  assert.throws(() => parseMarkedScript('[Scène 1 | bureau]\nNarrateur : Bonjour.\n[Geste : Zoé pleurer]'), /héros « Zoé » inconnu/);
+});

@@ -1,8 +1,7 @@
 // Personnage dessiné en SVG : tête ronde blanche, yeux, sourcils, bouche selon l'émotion.
 // Pas de dépendance à Remotion : utilisable dans le moteur de rendu comme sur le site.
 import React from 'react';
-import type { Expression, HairStyle } from './catalog.ts';
-import { characterById, type CharacterLook } from './catalog.ts';
+import { characterById, type CharacterLook, type Expression, type HairStyle } from './catalog.ts';
 import { REST_POSE, type Pose } from './poses.ts';
 
 const INK = '#111111';
@@ -170,10 +169,11 @@ function Arm({ shoulder, angle, side, shirt }: { shoulder: { x: number; y: numbe
   );
 }
 
-export const Character: React.FC<CharacterProps> = ({ characterId, expression = 'neutre', mouthOpen = 0, pose, look: custom, height = 360, style }) => {
+export const Character: React.FC<CharacterProps> = ({ characterId, expression: expr, mouthOpen = 0, pose, look: custom, height = 360, style }) => {
   const look: CharacterLook = { ...characterById(characterId), ...definedOnly(custom) };
   const p: Pose = { ...REST_POSE, ...pose };
   const width = (height * 200) / 360;
+  const mood: Expression = expr ?? 'neutre';
   return (
     <svg viewBox="0 0 200 360" width={width} height={height} style={style} aria-label={look.name} overflow="visible">
       <g transform={`translate(${p.shakeX} ${p.bodyY}) rotate(${p.tilt} 100 300)`}>
@@ -187,8 +187,8 @@ export const Character: React.FC<CharacterProps> = ({ characterId, expression = 
         {/* Tête */}
         <circle cx={100} cy={100} r={68} fill={look.skin} stroke={INK} strokeWidth={STROKE} />
         <Hair style={look.hair} color={look.hairColor} />
-        <Brows expression={expression} />
-        <Eyes expression={expression} />
+        <Brows expression={mood} />
+        <Eyes expression={mood} />
         {look.glasses && (
           <g fill="none" stroke={INK} strokeWidth={4}>
             <circle cx={76} cy={102} r={15} />
@@ -196,7 +196,7 @@ export const Character: React.FC<CharacterProps> = ({ characterId, expression = 
             <line x1={91} y1={102} x2={109} y2={102} />
           </g>
         )}
-        <Mouth expression={expression} open={mouthOpen} />
+        <Mouth expression={mood} open={mouthOpen} />
         {p.tears && (
           <g fill="#7CC4F2" stroke={INK} strokeWidth={2}>
             <path d="M68 124 Q64 136 68 142 Q74 136 68 124 Z" />

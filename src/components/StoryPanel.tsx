@@ -2,9 +2,8 @@
 // du mode (narrateur, dialogues ou les deux), aperçu de l'histoire, puis rendu.
 import React, { useEffect, useState } from 'react';
 import { createRender, generateStory, getStorySubjects, type RenderJob } from '../services/backendApi';
+import { StoryEditor } from './StoryEditor';
 import type { RenderSettings } from '../video-engine/montage';
-import { SETS } from '../video-engine/cartoon/catalog';
-import { Character } from '../video-engine/cartoon/Character';
 import { storyText, type Story, type StoryMode } from '../video-engine/story';
 
 type Source = 'proposed' | 'topic' | 'script';
@@ -182,53 +181,14 @@ export const StoryPanel: React.FC<{
 
           {story && (
             <div className="space-y-3 rounded-xl bg-black/30 p-3">
-              <div>
-                <p className="text-sm font-bold text-white">{story.title}</p>
-                <p className="text-xs text-gray-300 mt-1">{story.hook}</p>
+              <div className="space-y-2">
+                <span className="block text-[11px] text-gray-400">Titre</span>
+                <input value={story.title} onChange={(e) => setStory({ ...story, title: e.target.value.slice(0, 80) })} className="w-full rounded-lg bg-black/40 border border-white/10 p-2 text-xs text-gray-200 focus:outline-none focus:border-[#00FFC6]/50" />
+                <span className="block text-[11px] text-gray-400">Accroche</span>
+                <input value={story.hook} onChange={(e) => setStory({ ...story, hook: e.target.value.slice(0, 120) })} className="w-full rounded-lg bg-black/40 border border-white/10 p-2 text-xs text-gray-200 focus:outline-none focus:border-[#00FFC6]/50" />
               </div>
 
-              <div className="space-y-2">
-                <span className="block text-[11px] text-gray-400">Héros</span>
-                <div className="flex gap-2 flex-wrap">
-                  {story.characters.map((c) => (
-                    <div key={c.id} className="flex items-center gap-2 rounded-lg border border-white/10 px-2 py-1">
-                      <span className="block rounded-md bg-white overflow-hidden">
-                        <Character
-                          characterId={c.id}
-                          look={{ id: c.id, name: c.name, role: 'employe', hair: c.hair, hairColor: c.hairColor, shirt: c.shirt, tie: c.tie, glasses: c.glasses, skin: '#FFFFFF' }}
-                          height={40}
-                        />
-                      </span>
-                      <span className="text-[11px] text-gray-200">
-                        {c.name}
-                        <span className="block text-[10px] text-gray-500">voix {c.voice.gender === 'f' ? 'féminine' : 'masculine'}</span>
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <span className="block text-[11px] text-gray-400">Scènes</span>
-                {story.scenes.map((scene, i) => (
-                  <div key={i} className="rounded-lg border border-white/10 p-2 text-[11px] text-gray-300 space-y-1">
-                    <span className="font-bold text-gray-200">
-                      {i + 1}. {SETS.find((s) => s.id === scene.set)?.label ?? scene.set} · {scene.seconds} s
-                    </span>
-                    {scene.narration && <p className="italic">Narrateur : {scene.narration}</p>}
-                    {scene.lines.map((l, k) => (
-                      <p key={k}>
-                        {story.characters.find((c) => c.id === l.speaker)?.name ?? l.speaker} : {l.text}
-                      </p>
-                    ))}
-                    {scene.actions.length > 0 && (
-                      <p className="text-gray-500">
-                        Gestes : {scene.actions.map((a) => `${a.actor} ${a.action}`).join(', ')}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
+              <StoryEditor story={story} onChange={setStory} />
 
               <button
                 type="button"

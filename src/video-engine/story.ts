@@ -322,6 +322,22 @@ export function storyText(story: Story): string {
 
 const SCENE_LINE = /^\[\s*sc[èe]ne\s*\d*\s*(?:\|\s*([^\]]*?)\s*)?\]$/i;
 const SPEAKER_LINE = /^([^:()\[\]]{1,40}?)\s*(?:\(([^)]{1,20})\))?\s*:\s*(.+)$/;
+const GESTURE_LINE = /^\[\s*geste\s*[:|]\s*(.+?)\s*\]$/i;
+/** Gestes écrits en français, du plus long au plus court (« lever les bras » avant « lever »). */
+const GESTURE_WORDS: [string, StoryAction][] = [
+  ['lever les bras', 'lever-bras'],
+  ['lever-bras', 'lever-bras'],
+  ['immobile', 'immobile'],
+  ['marcher', 'marcher'],
+  ['sauter', 'sauter'],
+  ['saluer', 'saluer'],
+  ['pleurer', 'pleurer'],
+  ['sursauter', 'sursauter'],
+  ['rire', 'rire'],
+  ['applaudir', 'applaudir'],
+  ['entrer', 'entrer'],
+  ['sortir', 'sortir'],
+];
 const HAIRS = ['court', 'frange', 'chignon', 'herisse', 'gris'] as const;
 const HAIR_COLORS = ['#2B2B2B', '#6B3E2A', '#8E9399', '#1A1A1A'];
 const SHIRTS = ['#E6EEF8', '#1F2F4D', '#7A4FB8', '#2E7D4F'];
@@ -357,13 +373,13 @@ function secondsFor(words: number): number {
  */
 export function parseMarkedScript(raw: string): { input: unknown; mode: StoryMode } {
   // Import local pour éviter un cycle : la mise en scène des décors vit dans cartoon/direction.ts.
-  const scenes: { set: StoryScene['set']; narration: string[]; lines: StoryLine[] }[] = [];
+  const scenes: { set: StoryScene['set']; narration: string[]; lines: StoryLine[]; gestures: { name: string; action: StoryAction }[] }[] = [];
   const names = new Map<string, string>();
   const characters: StoryCharacter[] = [];
 
   const newScene = (decor: string | undefined) => {
     const set = directSet(decor ?? '');
-    scenes.push({ set, narration: [], lines: [] });
+    scenes.push({ set, narration: [], lines: [], gestures: [] });
   };
 
   for (const rawLine of raw.split('\n')) {
@@ -375,6 +391,16 @@ export function parseMarkedScript(raw: string): { input: unknown; mode: StoryMod
       continue;
     }
     if (scenes.length === 0) newScene(undefined);
+    const gesture = GESTURE_LINE.exec(line);
+    if (gesture) {
+      const content = foldText(gesture[1]);
+      const hit = GESTURE_WORDS.find(([word]) => content.endsWith(word));
+      if (!hit) throw new Error(`Geste inconnu : « ${gesture[1]} ». Gestes : ${GESTURE_WORDS.map(([w]) => w).filter((w, i, a) => a.indexOf(w) === i).join(', ')}.`);
+      const actor = gesture[1].slice(0, gesture[1].length - hit[0].length).replace(/[\s|:,-]+$/g, '').trim();
+      if (!actor) throw new Error(`Geste sans héros : « ${gesture[1]} ». Écris par exemple « [Geste : Karim pleurer] ».`);
+      scenes[scenes.length - 1].gestures.push({ name: actor, action: hit[1] });
+      continue;
+    }
     const m = SPEAKER_LINE.exec(line);
     if (!m) throw new Error(`Ligne sans locuteur : « ${line.slice(0, 60)} ». Écris « Narrateur : » ou « Nom : » devant la phrase.`);
     const name = m[1].trim();
@@ -413,7 +439,12 @@ export function parseMarkedScript(raw: string): { input: unknown; mode: StoryMod
   const sceneOut: StoryScene[] = scenes.map((s) => {
     const narration = s.narration.length > 0 ? s.narration.join(' ') : undefined;
     const words = [narration ?? '', ...s.lines.map((l) => l.text)].join(' ').split(/\s+/).filter(Boolean).length;
-    return { set: s.set, seconds: secondsFor(words), narration, lines: s.lines, actions: [] };
+    const actions = s.gestures.map((g) => {
+      const id = names.get(g.name) ?? names.get([...names.keys()].find((n) => foldText(n) === foldText(g.name)) ?? '');
+      if (!id) throw new Error(`Geste : héros « ${g.name} » inconnu dans la scène.`);
+      return { actor: id, action: g.action };
+    });
+    return { set: s.set, seconds: secondsFor(words), narration, lines: s.lines, actions };
   });
   const hasNarration = sceneOut.some((s) => s.narration);
   const hasLines = sceneOut.some((s) => s.lines.length > 0);

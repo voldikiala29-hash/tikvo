@@ -6,6 +6,7 @@ import { FPS } from '../timeline.ts';
 import { Character } from './Character.tsx';
 import { CartoonSet } from './Sets.tsx';
 import { poseFor, REST_POSE, type Pose } from './poses.ts';
+import { visemeOpen } from './lipsync.ts';
 import type { CartoonProps, CartoonScene } from './props.ts';
 
 const clamp = { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' } as const;
@@ -113,7 +114,9 @@ export const CartoonTemplate: React.FC<CartoonProps> = ({
     : speaking
       ? 'main'
       : null;
-  const mouth = speakingKey ? 0.5 + 0.5 * Math.sin(frame * 1.7) : 0;
+  // Bouche : ouverture selon les voyelles du mot prononcé, avec un léger mouvement.
+  const spokenWord = activeIdx !== -1 ? karaokeWords[activeIdx].word : '';
+  const mouth = speakingKey ? visemeOpen(spokenWord) * (0.85 + 0.15 * Math.sin(frame * 1.7)) : 0;
   const progressPercent = Math.min(100, Math.max(0, (frame / Math.max(1, totalDurationInFrames)) * 100));
 
   return (

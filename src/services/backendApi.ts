@@ -145,7 +145,6 @@ export interface RenderJob {
 export interface RenderRequest {
   title: string;
   hook: string;
-  script: string;
   pexelsQuery: string;
   nicheId: string;
   nicheName: string;

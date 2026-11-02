@@ -6,7 +6,7 @@ import { ANALYZE_MODEL, TTS_MODEL, dedupe, extractWorkersAiText } from './aiMode
 import { synthesizeSpeech } from './speech';
 import { KEYWORDS_SYSTEM, keywordsPrompt, parseKeywords } from './keywords';
 import { improveScript } from './improve';
-import { generateStory, suggestSubjects } from './storyGen';
+import { generateStory, reserveStoryQuota, suggestSubjects } from './storyGen';
 import { STORY_MODES, isMarkedScript, parseMarkedScript, validateStory, type StoryRequest } from '../../src/video-engine/story';
 import { BRIEF_SYSTEM, buildBriefPrompt, parseBriefPlan } from './briefs';
 import { addUserMedia, cleanDescription, deleteUserMedia, listUserMedia, mediaFileForPipeline, mediaForJob, publicMedia, updateUserMedia, userMediaFile } from './media';
@@ -477,7 +477,7 @@ async function handleStorySubjects(request: Request, env: Env): Promise<Response
 
 /** Histoire à partir d'un sujet (choisi ou écrit) ou d'un script fourni, dans le mode demandé. */
 async function handleStory(request: Request, env: Env): Promise<Response> {
-  await requireFirebaseUser(request, env);
+  const user = await requireFirebaseUser(request, env);
   const body = await readJson(request);
   const source = body.source === 'script' ? 'script' : 'topic';
   const mode = STORY_MODES.find((m) => m === body.mode);
@@ -496,6 +496,7 @@ async function handleStory(request: Request, env: Env): Promise<Response> {
     }
   }
   const req: StoryRequest = { source, topic, script, mode };
+  await reserveStoryQuota(env, user.uid);
   return respond(request, env, { story: await generateStory(env, req) });
 }
 

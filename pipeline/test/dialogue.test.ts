@@ -53,3 +53,12 @@ test('gestes : pose de repos sans geste, bras levés et larmes selon le geste', 
   assert.equal(poseFor('pleurer', 0.2).tears, true);
   assert.ok(poseFor('sauter', 0.35).bodyY < 0);
 });
+
+import { visemeOpen } from '../../src/video-engine/cartoon/lipsync.ts';
+
+test('bouche : voyelles ouvertes plus grandes que les fermées, mot sans voyelle au repos', () => {
+  assert.ok(visemeOpen('oh') > visemeOpen('idée'));
+  assert.ok(visemeOpen('mouche') > 0.5);
+  assert.equal(visemeOpen('brr'), 0.2);
+  assert.ok(visemeOpen('a') <= 1 && visemeOpen('i') >= 0.15);
+});
