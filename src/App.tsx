@@ -1,6 +1,5 @@
 import React from 'react';
 import { FirebaseProvider, useFirebase } from './contexts/FirebaseContext';
-import { useUserProfile } from './hooks/useUserProfile';
 import { LoginView } from './views/LoginView';
 import { GeneratorView } from './views/GeneratorView';
 
@@ -33,33 +32,13 @@ const Splash: React.FC<{ label: string }> = ({ label }) => (
 
 function FactoryGate() {
   const { user, loading, logout } = useFirebase();
-  const { profile, loading: profileLoading, error: profileError } = useUserProfile(user?.uid ?? null);
 
   if (loading) return <Splash label="Connexion…" />;
   if (!user) return <LoginView />;
-  if (profileLoading) return <Splash label="Chargement de ton espace…" />;
-  if (profileError) {
-    return (
-      <Shell email={user.email} onLogout={() => logout()}>
-        <div className="max-w-md mx-auto py-16 text-center space-y-4">
-          <p className="text-sm text-red-300">{profileError}</p>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold"
-          >
-            Réessayer
-          </button>
-        </div>
-      </Shell>
-    );
-  }
-
-  const body = <GeneratorView uid={user.uid} />;
 
   return (
     <Shell email={user.email} onLogout={() => logout()}>
-      {body}
+      <GeneratorView uid={user.uid} />
     </Shell>
   );
 }
