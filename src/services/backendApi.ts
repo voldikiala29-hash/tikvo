@@ -277,3 +277,12 @@ export const backend = {
   },
 };
 
+/** Script vocal généré à partir d'un prompt (quota partagé avec les histoires). */
+export async function generateScript(prompt: string): Promise<{ script: string; hook: string }> {
+  return authedCall<{ script: string; hook: string }>('/api/script', { method: 'POST', body: { prompt } });
+}
+
+/** Props d'un reel « Replica / Motion » générées à partir d'un prompt. */
+export async function generateReel(idea: string): Promise<import('../video-engine/reel/props').ReelProps> {
+  return (await authedCall<{ props: import('../video-engine/reel/props').ReelProps }>('/api/reel', { method: 'POST', body: { idea } })).props;
+}

@@ -441,6 +441,29 @@ async function handleReel(request: Request, env: Env): Promise<Response> {
   }
 }
 
+const SCRIPT_SYSTEM = 'Tu écris des scripts vocaux de vidéos courtes en français. Tu réponds uniquement avec le texte du script, sans titre ni commentaire.';
+
+/** Transforme un prompt en script vocal (30 à 45 s). Quota partagé avec les histoires et les reels. */
+async function handleScript(request: Request, env: Env): Promise<Response> {
+  const user = await requireFirebaseUser(request, env);
+  const body = await readJson(request);
+  const prompt = typeof body.prompt === 'string' ? body.prompt.replace(/\s+/g, ' ').trim().slice(0, 600) : '';
+  if (prompt.length < 5) throw new HttpError(400, 'invalid_param', 'Écris un prompt (au moins 5 caractères).');
+  await reserveStoryQuota(env, user.uid);
+  const raw = await callModel(
+    env,
+    `Prompt : ${prompt}\nÉcris le script vocal d'une vidéo de 30 à 45 secondes (environ 90 mots), en phrases courtes.`,
+    800,
+    SCRIPT_SYSTEM,
+  );
+  const script = raw.trim().replace(/^["«»]+|["«»]+$/g, '').trim();
+  if (script.length < 10 || script.length > 1500) {
+    throw new HttpError(502, 'generation_failed', 'Script non généré : réponse vide ou trop longue. Reformule le prompt.');
+  }
+  const hook = (script.split(/(?<=[.!?…])\s+/)[0] ?? script).slice(0, 120);
+  return respond(request, env, { script, hook });
+}
+
 async function handleStory(request: Request, env: Env): Promise<Response> {
   const user = await requireFirebaseUser(request, env);
   const body = await readJson(request);
@@ -583,6 +606,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === '/api/story/subjects' && method === 'GET') return handleStorySubjects(request, env);
   if (path === '/api/story' && method === 'POST') return handleStory(request, env);
   if (path === '/api/reel' && method === 'POST') return handleReel(request, env);
+  if (path === '/api/script' && method === 'POST') return handleScript(request, env);
   if (path === '/api/test-ai' && method === 'GET') return handleTestAi(request, env);
   if (path === '/api/tts-free' && method === 'POST') return handleTtsFree(request, env);
   if (path === '/api/settings' && method === 'GET') return handleGetSettings(request, env);
