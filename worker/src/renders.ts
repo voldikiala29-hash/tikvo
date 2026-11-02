@@ -4,6 +4,7 @@ import { dispatchWorkflow } from './github';
 import { HttpError, Env } from './types';
 import { RenderSettings, resolveRenderSettings } from './renderSettings';
 import { resolveVoice } from './voices';
+import { reelScript, validateReelProps, type ReelProps } from '../../src/video-engine/reel/parse';
 import { STORY_MODES, isMarkedScript, parseMarkedScript, storyText, validateStory, type Story } from '../../src/video-engine/story';
 
 const DAILY_LIMIT = 60;
@@ -30,12 +31,14 @@ export interface RenderInput {
   media?: unknown[];
   /** Plans voulus, dans l'ordre (vide = plans issus du script). */
   storyboard: StoryboardShot[];
-  /** Style : plans Pixabay (stock) ou dessin animé (cartoon). */
-  style: 'stock' | 'cartoon';
+  /** Style : plans Pixabay (stock), dessin animé (cartoon) ou reel « Replica / Motion » (reel). */
+  style: 'stock' | 'cartoon' | 'reel';
   /** Personnage principal du dessin animé (identifiant du catalogue). */
   mainCharacter: string;
   /** Histoire en dessin animé, validée (absente pour les autres rendus). */
   story?: Story;
+  /** Reel « Replica / Motion », validé (absent pour les autres rendus). */
+  reel?: ReelProps;
 }
 
 export interface RenderView {
@@ -117,6 +120,14 @@ function storyFromMarkedScript(script: unknown): Story | undefined {
   }
 }
 
+function parseReelField(value: unknown): ReelProps {
+  try {
+    return validateReelProps(value);
+  } catch (err) {
+    throw new HttpError(400, 'invalid_param', `Reel invalide : ${err instanceof Error ? err.message : 'format inattendu'}`);
+  }
+}
+
 export function parseRenderInput(body: Record<string, unknown>): RenderInput {
   const nicheId = text(body.nicheId, 2, 20, 'nicheId');
   if (!/^[a-z]+$/.test(nicheId)) throw bad('nicheId');
@@ -126,13 +137,16 @@ export function parseRenderInput(body: Record<string, unknown>): RenderInput {
   if (!/^\d{4}-\d{2}-\d{2}-\d$/.test(videoKey)) throw bad('videoKey');
 
   // Dessin animé : un script balisé devient une histoire (plans, répliques, émotions et gestes suivis).
+  const style: 'stock' | 'cartoon' | 'reel' = body.style === 'cartoon' ? 'cartoon' : body.style === 'reel' ? 'reel' : 'stock';
+  const reel = style === 'reel' ? parseReelField(body.reel) : undefined;
   const story =
     parseStoryField(body.story) ?? (body.style === 'cartoon' ? storyFromMarkedScript(body.script) : undefined);
   return {
     title: text(body.title, 1, 150, 'title'),
-    hook: story ? story.hook : text(body.hook, 1, 250, 'hook'),
-    script: story ? storyText(story).slice(0, 1500) : text(body.script, 10, 1500, 'script'),
+    hook: story ? story.hook : reel ? reel.hook : text(body.hook, 1, 250, 'hook'),
+    script: story ? storyText(story).slice(0, 1500) : reel ? reelScript(reel) : text(body.script, 10, 1500, 'script'),
     story,
+    reel,
     pexelsQuery: text(body.pexelsQuery || 'lifestyle', 1, 100, 'pexelsQuery'),
     nicheId,
     nicheName: text(body.nicheName, 1, 40, 'nicheName'),
@@ -141,7 +155,7 @@ export function parseRenderInput(body: Record<string, unknown>): RenderInput {
     settings: resolveRenderSettings(body.settings),
     variant: Number.isInteger(body.variant) ? Math.min(999, Math.max(0, Number(body.variant))) : 0,
     storyboard: storyboardInput(body.storyboard),
-    style: body.style === 'cartoon' ? 'cartoon' : 'stock',
+    style,
     mainCharacter:
       typeof body.mainCharacter === 'string' && /^[a-z-]{2,30}$/.test(body.mainCharacter) ? body.mainCharacter : 'employe',
   };
@@ -172,10 +186,11 @@ function toView(row: JobRow): RenderView {
 /** Même script et mêmes réglages qu'un rendu existant ? */
 function sameRequest(paramsJson: string, input: RenderInput): boolean {
   try {
-    const p = JSON.parse(paramsJson) as { script?: string; settings?: unknown; storyboard?: unknown; style?: string; mainCharacter?: string; story?: unknown };
+    const p = JSON.parse(paramsJson) as { script?: string; settings?: unknown; storyboard?: unknown; style?: string; mainCharacter?: string; story?: unknown; reel?: unknown };
     return (
       p.script === input.script &&
       JSON.stringify(p.story ?? null) === JSON.stringify(input.story ?? null) &&
+      JSON.stringify(p.reel ?? null) === JSON.stringify(input.reel ?? null) &&
       (p.style ?? 'stock') === input.style &&
       (input.style === 'stock' || (p.mainCharacter ?? 'employe') === input.mainCharacter) &&
       JSON.stringify(resolveRenderSettings(p.settings)) === JSON.stringify(input.settings) &&
@@ -235,6 +250,7 @@ export async function createRender(
     style: input.style,
     mainCharacter: input.mainCharacter,
     story: input.story ?? null,
+    reel: input.reel ?? null,
   };
   await env.DB.prepare(
     `INSERT INTO jobs (id, open_id, status, step, progress, params, created_at, updated_at)

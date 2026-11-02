@@ -123,8 +123,9 @@ export interface JobData {
     variant?: number;
     /** Histoire en dessin animé (mode histoire) : héros, scènes et répliques. */
     story?: unknown;
+    reel?: unknown;
     /** Style de montage : plans Pixabay (défaut) ou dessin animé. */
-    style?: 'stock' | 'cartoon';
+    style?: 'stock' | 'cartoon' | 'reel';
     /** Personnage principal du dessin animé (identifiant du catalogue). */
     mainCharacter?: string;
     /** Storyboard : plans voulus, dans l'ordre, avec une durée facultative (secondes). */
