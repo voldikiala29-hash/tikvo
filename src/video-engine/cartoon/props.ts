@@ -39,6 +39,8 @@ export interface CartoonUtterance {
   speaker: string;
   startFrame: number;
   endFrame: number;
+  /** Émotion du héros pendant cette réplique. */
+  expression?: Expression;
 }
 
 /** Une piste audio par réplique (mode histoire), posée à sa frame de départ. */
@@ -153,4 +155,12 @@ export function cartoonVideoProps(input: CartoonVideoInput): CartoonProps {
 /** Disposition d'un nombre de personnages à l'écran (1 à 3). */
 export function cartoonLayout(count: number): { x: number; scale: number }[] {
   return LAYOUT[count] ?? LAYOUT[1];
+}
+
+/** Émotion d'un héros à une frame : celle de sa dernière réplique commencée (null s'il n'a pas encore parlé). */
+export function expressionAt(utterances: CartoonUtterance[] | undefined, key: string, frame: number): Expression | null {
+  if (!utterances) return null;
+  let found: Expression | null = null;
+  for (const u of utterances) if (u.speaker === key && u.startFrame <= frame && u.expression) found = u.expression;
+  return found;
 }

@@ -77,6 +77,7 @@ export function storyCartoonProps(input: StoryVideoInput): CartoonProps {
     speaker: it.speaker,
     startFrame: it.startFrame,
     endFrame: it.endFrame,
+    expression: it.expression as CartoonUtterance['expression'],
   }));
   const audioTracks: CartoonAudioTrack[] = timeline.items.map((it, k) => ({
     src: input.audioFiles[k],

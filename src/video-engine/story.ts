@@ -411,8 +411,8 @@ export function parseMarkedScript(raw: string): { input: unknown; mode: StoryMod
       scene.narration.push(text);
       continue;
     }
-    const emotionKey = m[2] ? foldText(m[2]).trim() : 'neutre';
-    const expression = EMOTIONS[emotionKey] ?? 'neutre';
+    const emotionKey = m[2] ? foldText(m[2]).trim() : '';
+    const expression = (emotionKey ? EMOTIONS[emotionKey] : undefined) ?? emotionFromText(text) ?? 'neutre';
     let id = names.get(name);
     if (!id) {
       if (characters.length >= 4) throw new Error('Quatre héros maximum : vérifie les noms de locuteurs.');
@@ -439,11 +439,20 @@ export function parseMarkedScript(raw: string): { input: unknown; mode: StoryMod
   const sceneOut: StoryScene[] = scenes.map((s) => {
     const narration = s.narration.length > 0 ? s.narration.join(' ') : undefined;
     const words = [narration ?? '', ...s.lines.map((l) => l.text)].join(' ').split(/\s+/).filter(Boolean).length;
-    const actions = s.gestures.map((g) => {
+    const written = s.gestures.map((g) => {
       const id = names.get(g.name) ?? names.get([...names.keys()].find((n) => foldText(n) === foldText(g.name)) ?? '');
       if (!id) throw new Error(`Geste : héros « ${g.name} » inconnu dans la scène.`);
       return { actor: id, action: g.action };
     });
+    // Sans geste écrit : les gestes viennent du texte (verbes), attribués au héros nommé dans la phrase.
+    const sentences = [narration ?? '', ...s.lines.map((l) => l.text)].flatMap((t) => t.split(/(?<=[.!?…])\s+/)).filter(Boolean);
+    const nameOf = (sentence: string): string | null => {
+      const t = foldText(sentence);
+      for (const [name, id] of names) if (t.includes(foldText(name).split(' ')[0])) return id;
+      return null;
+    };
+    const fallback = s.lines[0]?.speaker ?? characters[0]?.id ?? '';
+    const actions = written.length > 0 ? written : inferActions(sentences, fallback, nameOf).filter((a) => a.actor);
     return { set: s.set, seconds: secondsFor(words), narration, lines: s.lines, actions };
   });
   const hasNarration = sceneOut.some((s) => s.narration);
@@ -462,4 +471,51 @@ function directSet(decor: string): StoryScene['set'] {
   if (/couloir|porte|escalier|ascenseur/.test(t)) return 'couloir';
   if (/dehors|exterieur|rue|parking|ville|trottoir|immeuble/.test(t)) return 'exterieur';
   return 'bureau';
+}
+
+// ---------------------------------------------------------------------------
+// Émotions et gestes déduits du texte : l'animation suit ce qui est raconté.
+// ---------------------------------------------------------------------------
+
+const EMOTION_CUES: [StoryExpression, RegExp][] = [
+  ['colere', /\b(colere|enerve|furieux|hurle|crie|agace)\b/],
+  ['triste', /\b(triste|pleure|decu|abattu|inquiet|sanglot)/],
+  ['surpris', /\b(surpris|choque|etonne|stupefait|pas possible|incroyable)/],
+  ['content', /\b(content|heureux|sourit|ravi|fier|soulage|rit)\b/],
+];
+
+/** Émotion suggérée par un texte (null si aucun indice). */
+export function emotionFromText(text: string): StoryExpression | null {
+  const t = foldText(text);
+  for (const [expression, re] of EMOTION_CUES) if (re.test(t)) return expression;
+  return null;
+}
+
+const ACTION_CUES: [StoryAction, RegExp][] = [
+  ['pleurer', /\bpleur/],
+  ['sursauter', /\bsursaut/],
+  ['applaudir', /\bapplaud/],
+  ['lever-bras', /\blev(?:e|er|ent|é)\b.*\bbras\b|\bbras en l'air\b/],
+  ['saluer', /\bsalu(?:e|er|ent)\b/],
+  ['sauter', /\bsaut(?:e|er|ent)\b/],
+  ['rire', /\b(rit|rire|rigole|eclate de rire)\b/],
+  ['entrer', /\bentre dans\b/],
+  ['sortir', /\bsort(?:ir|ent)? de\b/],
+  ['marcher', /\b(traverse|court|marche|avance|s'avance|se leve|se lève|se dirige)\b/],
+];
+
+/**
+ * Gestes déduits d'une phrase : le héros nommé dans la phrase, sinon le premier locuteur de la scène.
+ * Un seul geste par phrase, pas plus de MAX_ACTIONS_PER_SCENE au total.
+ */
+export function inferActions(sentences: string[], fallbackActor: string, nameOf: (text: string) => string | null): StoryAct[] {
+  const out: StoryAct[] = [];
+  for (const sentence of sentences) {
+    if (out.length >= MAX_ACTIONS_PER_SCENE) break;
+    const t = foldText(sentence);
+    const hit = ACTION_CUES.find(([, re]) => re.test(t));
+    if (!hit) continue;
+    out.push({ actor: nameOf(sentence) ?? fallbackActor, action: hit[0] });
+  }
+  return out;
 }

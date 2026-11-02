@@ -4,7 +4,7 @@ import { dispatchWorkflow } from './github';
 import { HttpError, Env } from './types';
 import { RenderSettings, resolveRenderSettings } from './renderSettings';
 import { resolveVoice } from './voices';
-import { STORY_MODES, storyText, validateStory, type Story } from '../../src/video-engine/story';
+import { STORY_MODES, isMarkedScript, parseMarkedScript, storyText, validateStory, type Story } from '../../src/video-engine/story';
 
 const DAILY_LIMIT = 60;
 
@@ -106,6 +106,17 @@ function parseStoryField(value: unknown): Story | undefined {
   }
 }
 
+/** Script balisé (« [Scène 1 | bureau] … ») envoyé en dessin animé : même histoire que le mode direct, sans IA. */
+function storyFromMarkedScript(script: unknown): Story | undefined {
+  if (typeof script !== 'string' || !isMarkedScript(script)) return undefined;
+  try {
+    const parsed = parseMarkedScript(script);
+    return validateStory(parsed.input, parsed.mode);
+  } catch (err) {
+    throw new HttpError(400, 'invalid_param', `Script balisé invalide : ${err instanceof Error ? err.message : 'format inattendu'}`);
+  }
+}
+
 export function parseRenderInput(body: Record<string, unknown>): RenderInput {
   const nicheId = text(body.nicheId, 2, 20, 'nicheId');
   if (!/^[a-z]+$/.test(nicheId)) throw bad('nicheId');
@@ -114,7 +125,9 @@ export function parseRenderInput(body: Record<string, unknown>): RenderInput {
   const videoKey = text(body.videoKey, 12, 16, 'videoKey');
   if (!/^\d{4}-\d{2}-\d{2}-\d$/.test(videoKey)) throw bad('videoKey');
 
-  const story = parseStoryField(body.story);
+  // Dessin animé : un script balisé devient une histoire (plans, répliques, émotions et gestes suivis).
+  const story =
+    parseStoryField(body.story) ?? (body.style === 'cartoon' ? storyFromMarkedScript(body.script) : undefined);
   return {
     title: text(body.title, 1, 150, 'title'),
     hook: story ? story.hook : text(body.hook, 1, 250, 'hook'),

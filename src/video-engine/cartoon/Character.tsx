@@ -3,6 +3,7 @@
 import React from 'react';
 import { characterById, type CharacterLook, type Expression, type HairStyle } from './catalog.ts';
 import { REST_POSE, type Pose } from './poses.ts';
+import type { Idle } from './idle.ts';
 
 const INK = '#111111';
 const STROKE = 5;
@@ -78,7 +79,15 @@ function Brows({ expression }: { expression: Expression }): React.ReactElement {
 }
 
 /** Yeux : ouverts, fermés (joie) ou grands ouverts (surprise). */
-function Eyes({ expression }: { expression: Expression }): React.ReactElement {
+function Eyes({ expression, blink }: { expression: Expression; blink?: boolean }): React.ReactElement {
+  if (blink) {
+    return (
+      <g fill="none" stroke={INK} strokeWidth={5} strokeLinecap="round">
+        <path d="M66 104 Q76 110 86 104" />
+        <path d="M114 104 Q124 110 134 104" />
+      </g>
+    );
+  }
   if (expression === 'content') {
     return (
       <g fill="none" stroke={INK} strokeWidth={5} strokeLinecap="round">
@@ -142,6 +151,8 @@ export interface CharacterProps {
   look?: Partial<CharacterLook>;
   /** Hauteur en pixels (la largeur suit le dessin). */
   height?: number;
+  /** Vie au repos : respiration, balancement et clignement. */
+  idle?: Idle;
   style?: React.CSSProperties;
 }
 
@@ -169,14 +180,16 @@ function Arm({ shoulder, angle, side, shirt }: { shoulder: { x: number; y: numbe
   );
 }
 
-export const Character: React.FC<CharacterProps> = ({ characterId, expression: expr, mouthOpen = 0, pose, look: custom, height = 360, style }) => {
+export const Character: React.FC<CharacterProps> = ({ characterId, expression: expr, mouthOpen = 0, pose, look: custom, height = 360, idle, style }) => {
   const look: CharacterLook = { ...characterById(characterId), ...definedOnly(custom) };
   const p: Pose = { ...REST_POSE, ...pose };
   const width = (height * 200) / 360;
   const mood: Expression = expr ?? 'neutre';
+  const breathY = idle ? 1.5 * idle.breath : 0;
+  const swayDeg = idle ? 0.8 * idle.sway : 0;
   return (
     <svg viewBox="0 0 200 360" width={width} height={height} style={style} aria-label={look.name} overflow="visible">
-      <g transform={`translate(${p.shakeX} ${p.bodyY}) rotate(${p.tilt} 100 300)`}>
+      <g transform={`translate(${p.shakeX} ${p.bodyY + breathY}) rotate(${p.tilt + swayDeg} 100 300)`}>
         {/* Corps */}
         <path d="M30 360 L30 240 Q30 170 100 165 Q170 170 170 240 L170 360 Z" fill={look.shirt} stroke={INK} strokeWidth={STROKE} />
         <path d="M84 165 L100 200 L116 165" fill="#FFFFFF" stroke={INK} strokeWidth={4} />
@@ -188,7 +201,7 @@ export const Character: React.FC<CharacterProps> = ({ characterId, expression: e
         <circle cx={100} cy={100} r={68} fill={look.skin} stroke={INK} strokeWidth={STROKE} />
         <Hair style={look.hair} color={look.hairColor} />
         <Brows expression={mood} />
-        <Eyes expression={mood} />
+        <Eyes expression={mood} blink={idle?.blink} />
         {look.glasses && (
           <g fill="none" stroke={INK} strokeWidth={4}>
             <circle cx={76} cy={102} r={15} />
