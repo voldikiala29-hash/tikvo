@@ -143,7 +143,8 @@ const SETS_ART: Record<SetId, () => React.ReactElement> = {
 
 /** Décor plein cadre, recadré pour remplir le format (vertical ou horizontal). */
 export const CartoonSet: React.FC<{ set: SetId; style?: React.CSSProperties }> = ({ set, style }) => {
-  const Art = SETS_ART[set] ?? Bureau;
+  const key: SetId = set;
+  const Art = SETS_ART[key] ?? Bureau;
   return (
     <svg
       viewBox="0 0 1080 1920"
