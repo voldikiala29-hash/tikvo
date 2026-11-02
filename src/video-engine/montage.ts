@@ -4,7 +4,7 @@ import type { MontageConfig } from './types';
 import { VOICES, VOICE_STYLES } from './voices.ts';
 
 export const ASPECTS = [
-  { id: '9:16', label: 'Vertical 9:16', hint: 'TikTok, Reels, Shorts', width: 1080, height: 1920 },
+  { id: '9:16', label: 'Vertical 9:16', hint: 'Reels, Shorts', width: 1080, height: 1920 },
   { id: '16:9', label: 'Horizontal 16:9', hint: 'YouTube, présentation', width: 1920, height: 1080 },
   { id: '1:1', label: 'Carré 1:1', hint: 'Feed Instagram', width: 1080, height: 1080 },
   { id: '4:5', label: 'Portrait 4:5', hint: 'Feed Instagram, Facebook', width: 1080, height: 1350 },

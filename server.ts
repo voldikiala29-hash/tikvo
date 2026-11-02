@@ -50,26 +50,6 @@ async function startServer() {
     }
   });
 
-  // API Route: /api/tiktok/post
-  // Posts or schedules video directly to TikTok Business Direct Post API
-  app.post('/api/tiktok/post', async (req, res) => {
-    try {
-      const { caption, privacyLevel = 'PUBLIC_TO_EVERYONE' } = req.body;
-
-      console.log('[tikvo TikTok API] Publish request received:', { caption, privacyLevel });
-
-      // Aucun appel à TikTok n'est fait ici (OAuth + Direct Post API à implémenter).
-      // On répond 501 plutôt que d'inventer un publishId / un lien TikTok.
-      res.status(501).json({
-        success: false,
-        error: 'NOT_IMPLEMENTED',
-        message: 'La publication TikTok réelle n\'est pas encore implémentée : rien n\'a été publié.',
-      });
-    } catch (error: any) {
-      console.error('[TikTok Post Error]', error);
-      res.status(500).json({ success: false, error: error.message });
-    }
-  });
 
   // Redirect root to /tikvo/ so access works seamlessly in development and production
   app.get('/', (req, res) => {

@@ -103,7 +103,6 @@ export interface JobPatch {
   error?: string | null;
   publish?: {
     publishId?: string;
-    tiktokStatus?: string;
     postIds?: string[];
     error?: string | null;
   };

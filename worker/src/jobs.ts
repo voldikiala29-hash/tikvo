@@ -117,7 +117,6 @@ export function publicJob(row: JobRow) {
       privacy: publish.privacy,
       publishAt: publish.publishAt,
       publishId: publish.publishId,
-      tiktokStatus: publish.tiktokStatus,
       postIds: publish.postIds,
       username: publish.username,
       error: publish.error ?? null,

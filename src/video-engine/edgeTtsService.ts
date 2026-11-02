@@ -9,13 +9,13 @@ export interface EdgeTtsVoice {
   description: string;
 }
 
-export const TIKTOK_FREE_VOICES: EdgeTtsVoice[] = [
+export const FREE_VOICES: EdgeTtsVoice[] = [
   {
     id: 'fr-FR-VivienneMultilingualNeural',
-    name: 'Vivienne (TikTok Viral Féminin)',
+    name: 'Vivienne (Viral féminin)',
     gender: 'Female',
     locale: 'fr-FR',
-    description: 'Voix dynamique et claire très populaire sur TikTok France',
+    description: 'Voix dynamique et claire, pour les vidéos courtes',
   },
   {
     id: 'fr-FR-RemyMultilingualNeural',

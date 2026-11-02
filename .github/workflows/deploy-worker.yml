@@ -33,8 +33,6 @@ jobs:
         run: |
           set -e
           put() { printf '%s' "$2" | npx -y wrangler@4 secret put "$1" >/dev/null; }
-          put TIKTOK_CLIENT_KEY "${{ secrets.TIKTOK_CLIENT_KEY }}"
-          put TIKTOK_CLIENT_SECRET "${{ secrets.TIKTOK_CLIENT_SECRET }}"
           put RENDER_SECRET "${{ secrets.RENDER_SECRET }}"
           put GH_DISPATCH_TOKEN "${{ secrets.GH_DISPATCH_TOKEN }}"
           put PEXELS_API_KEY "${{ secrets.PEXELS_API_KEY }}"

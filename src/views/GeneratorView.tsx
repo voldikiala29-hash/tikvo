@@ -3,8 +3,9 @@
 import React, { useEffect, useState } from 'react';
 import { addDoc, collection, deleteDoc, doc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../services/firebase';
-import { createRender, type RenderJob } from '../services/backendApi';
-import { DEFAULT_RENDER_SETTINGS } from '../video-engine/montage';
+import { createRender, getRenderSettings, saveRenderSettings, type RenderJob } from '../services/backendApi';
+import { DEFAULT_RENDER_SETTINGS, resolveRenderSettings, type RenderSettings } from '../video-engine/montage';
+import { RenderSettingsPanel } from '../components/RenderSettingsPanel';
 import { CHARACTERS } from '../video-engine/cartoon/catalog';
 import type { ReelProps } from '../video-engine/reel/props';
 
@@ -23,6 +24,26 @@ const MODELS: { id: ModelId; label: string; hint: string }[] = [
 
 /** Générateur sans niche : le rendu reçoit une niche neutre, la voix et le style restent ceux par défaut. */
 const NEUTRAL_NICHE = { id: 'generateur', name: 'Générateur' };
+
+const SETTINGS_KEY = 'tikvo.renderSettings.v1';
+
+/** Dernier réglage choisi sur cet appareil (affichage immédiat, avant la réponse du serveur). */
+function readLocalSettings(): RenderSettings | null {
+  try {
+    const raw = window.localStorage.getItem(SETTINGS_KEY);
+    return raw ? resolveRenderSettings(JSON.parse(raw)) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeLocalSettings(settings: RenderSettings): void {
+  try {
+    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  } catch {
+    /* stockage indisponible : le réglage reste en mémoire et côté serveur */
+  }
+}
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 const firstLine = (text: string): string => text.split('\n').find((l) => l.trim())?.trim() ?? '';
@@ -60,9 +81,27 @@ export const GeneratorView: React.FC<{ uid: string }> = ({ uid }) => {
   const [ctaKeyword, setCtaKeyword] = useState('REPLICA');
   const [priceLines, setPriceLines] = useState('');
   const [skillsText, setSkillsText] = useState('');
+  const [settings, setSettings] = useState<RenderSettings>(() => readLocalSettings() ?? DEFAULT_RENDER_SETTINGS);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [job, setJob] = useState<RenderJob | null>(null);
+
+  // Réglages enregistrés sur le serveur : ils priment sur le choix local.
+  useEffect(() => {
+    getRenderSettings()
+      .then(({ settings: remote, saved }) => {
+        if (!saved) return;
+        setSettings(remote);
+        writeLocalSettings(remote);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  const changeSettings = (next: RenderSettings) => {
+    setSettings(next);
+    writeLocalSettings(next);
+    saveRenderSettings(next).catch((err: unknown) => setError(err instanceof Error ? err.message : 'Réglages non enregistrés.'));
+  };
 
   const loadScript = (s: SavedScript) => {
     setTitle(s.title);
@@ -95,7 +134,7 @@ export const GeneratorView: React.FC<{ uid: string }> = ({ uid }) => {
       nicheName: NEUTRAL_NICHE.name,
       day,
       videoKey: `${day}-${Date.now() % 10}`,
-      settings: DEFAULT_RENDER_SETTINGS,
+      settings,
     };
     setBusy(true);
     try {
@@ -156,6 +195,8 @@ export const GeneratorView: React.FC<{ uid: string }> = ({ uid }) => {
           </button>
         </div>
       </section>
+
+      <RenderSettingsPanel settings={settings} onChange={changeSettings} />
 
       <section>
         <h2 className="text-base font-black text-white mb-2">Modèle</h2>

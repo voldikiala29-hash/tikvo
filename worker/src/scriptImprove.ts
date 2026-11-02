@@ -1,6 +1,6 @@
 // Amélioration du script avant la recherche d'images. Module pur (aucun import) : testé sous Node.
 
-export const IMPROVE_SYSTEM = 'Tu es scénariste de vidéos TikTok. Tu réponds uniquement avec le texte du script, sans titre ni commentaire.';
+export const IMPROVE_SYSTEM = 'Tu es scénariste de vidéos courtes. Tu réponds uniquement avec le texte du script, sans titre ni commentaire.';
 
 export function improvePrompt(script: string, niche: string): string {
   return [
